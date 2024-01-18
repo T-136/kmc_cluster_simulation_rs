@@ -83,9 +83,6 @@ struct Args {
     #[arg(short, long, default_value_t = 300.)]
     temperature: f64,
 
-    #[arg(short, long)]
-    begin_temperature: Option<f64>,
-
     #[arg(long, allow_hyphen_values(true))]
     e_l_cn: Option<String>,
 
@@ -149,7 +146,6 @@ fn main() {
     let args = Args::parse();
     let save_folder: String = args.folder;
     let temperature: f64 = args.temperature;
-    let start_temperature: Option<f64> = args.begin_temperature;
     let unique_levels = args.unique_levels;
     if !std::path::Path::new(&save_folder).exists() {
         fs::create_dir_all(&save_folder).unwrap();
@@ -227,7 +223,6 @@ fn main() {
                 input_file,
                 atoms_input,
                 temperature,
-                start_temperature,
                 save_folder,
                 write_snap_shots,
                 heat_map,

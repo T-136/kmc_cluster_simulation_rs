@@ -51,7 +51,6 @@ pub struct Simulation {
     total_energy_1000: i64,
     cn_dict: [u32; CN + 1],
     save_folder: String,
-    start_temperature: Option<f64>,
     temperature: f64,
     cn_dict_sections: Vec<HashMap<u8, f64>>,
     energy_sections_list: Vec<f64>,
@@ -70,7 +69,6 @@ impl Simulation {
         input_file: Option<String>,
         atoms_input: Option<u32>,
         temperature: f64,
-        start_temperature: Option<f64>,
         save_folder_name: String,
         write_snap_shots: bool,
         is_heat_map: bool,
@@ -154,18 +152,7 @@ impl Simulation {
             // }
         }
 
-        let simulation_folder_name = match start_temperature {
-            Some(start_temp) => {
-                std::format!(
-                    "{}-{}K_{}I_{}A",
-                    start_temp,
-                    temperature,
-                    niter,
-                    onlyocc.len()
-                )
-            }
-            None => std::format!("{}K_{}I_{}A", temperature, niter, onlyocc.len()),
-        };
+        let simulation_folder_name = std::format!("{}K_{}I_{}A", temperature, niter, onlyocc.len());
 
         let mut sub_folder = save_folder_name + &simulation_folder_name;
 
@@ -208,7 +195,6 @@ impl Simulation {
             total_energy_1000,
             cn_dict,
             save_folder: sub_folder,
-            start_temperature,
             temperature,
             cn_dict_sections,
             energy_sections_list,
@@ -258,8 +244,7 @@ impl Simulation {
                 }
             }
         }
-        self.possible_moves
-            .calc_total_k_change(self.calculate_current_temp(0, cut_off_perc));
+        self.possible_moves.calc_total_k_change(self.temperature);
 
         let section_size: u64 = self.niter / AMOUNT_SECTIONS as u64;
         println!("section_size: {}", section_size);
@@ -294,10 +279,7 @@ impl Simulation {
 
             let (move_from, move_to, energy1000_diff, k_tot) = self
                 .possible_moves
-                .choose_ramdom_move_kmc(
-                    &mut rng_choose,
-                    self.calculate_current_temp(iiter, cut_off_perc),
-                )
+                .choose_ramdom_move_kmc(&mut rng_choose, self.temperature)
                 .expect("kmc pick move failed");
             self.increment_time(k_tot, &mut rng_choose);
             self.perform_move(move_from, move_to, energy1000_diff, is_recording_sections);
@@ -470,47 +452,6 @@ impl Simulation {
         } else {
             None
         }
-    }
-
-    fn calculate_current_temp(&self, iiter: u64, cut_off_perc: f64) -> f64 {
-        let heating_temp = 5000.;
-        if self.start_temperature.is_some() {
-            if (iiter + 1) as f64 <= self.niter as f64 * cut_off_perc {
-                heating_temp
-                    - ((iiter + 1) as f64 / (self.niter as f64 * cut_off_perc))
-                        * (heating_temp - self.start_temperature.unwrap())
-            } else {
-                self.start_temperature.unwrap()
-                    - ((iiter + 1) as f64 - self.niter as f64 * cut_off_perc)
-                        / (self.niter as f64 * (1. - cut_off_perc))
-                        * (self.start_temperature.unwrap() - self.temperature)
-            }
-        } else {
-            if (iiter + 1) as f64 <= self.niter as f64 * cut_off_perc {
-                heating_temp
-                    - (iiter as f64 / (self.niter as f64 * cut_off_perc))
-                        * (heating_temp - self.temperature)
-            } else {
-                self.temperature
-            }
-        }
-    }
-
-    fn is_acceptance_criteria_fulfilled(
-        &mut self,
-        energy1000_diff: i64,
-        rng_e_number: &mut SmallRng,
-        iiter: u64,
-        cut_off_perc: f64,
-    ) -> bool {
-        const KB: f64 = 8.6173324e-5;
-        if energy1000_diff <= 0 {
-            return true;
-        }
-        let acceptance_temp = self.calculate_current_temp(iiter, cut_off_perc);
-        let between = Uniform::new_inclusive(0., 1.);
-        let rand_value = between.sample(rng_e_number);
-        (rand_value) < ((-energy1000_diff as f64 / 1000.) / (KB * acceptance_temp)).exp()
     }
 
     fn perform_move(
@@ -1089,7 +1030,6 @@ mod tests {
             None,
             Some(20),
             300.,
-            None,
             String::from("./sim/"),
             false,
             false,
