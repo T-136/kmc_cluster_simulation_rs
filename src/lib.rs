@@ -222,11 +222,8 @@ impl Simulation {
         }
     }
 
-    pub fn run(&mut self, mut amount_unique_levels: i32, simtype: SimType) -> Results {
-        let save_every_nth: u64 = match simtype {
-            SimType::Mc => 1000,
-            SimType::Kmc => 100,
-        };
+    pub fn run(&mut self, mut amount_unique_levels: i32) -> Results {
+        let save_every_nth: u64 = 100;
         let mut rng_choose = SmallRng::from_entropy();
 
         let cut_off_perc = self.optimization_cut_off_fraction[0] as f64
@@ -255,21 +252,14 @@ impl Simulation {
                     // >1 so that atoms cant leave the cluster
                     // <x cant move if all neighbors are occupied
                     if self.cn_metal[*u as usize] > 1 {
-                        match simtype {
-                            SimType::Mc => self.possible_moves.add_item(*o, *u, None),
-                            SimType::Kmc => {
-                                let energy = Some(self.calc_energy_change_by_move(*o, *u));
-                                self.possible_moves.add_item(*o, *u, energy)
-                            }
-                        }
+                        let energy = Some(self.calc_energy_change_by_move(*o, *u));
+                        self.possible_moves.add_item(*o, *u, energy)
                     }
                 }
             }
         }
-        if let SimType::Kmc = simtype {
-            self.possible_moves
-                .calc_total_k_change(self.calculate_current_temp(0, cut_off_perc));
-        }
+        self.possible_moves
+            .calc_total_k_change(self.calculate_current_temp(0, cut_off_perc));
 
         let section_size: u64 = self.niter / AMOUNT_SECTIONS as u64;
         println!("section_size: {}", section_size);
@@ -302,48 +292,19 @@ impl Simulation {
                 }
             };
 
-            match simtype {
-                SimType::Mc => {
-                    let (move_from, move_to, _) =
-                        self.possible_moves.choose_random_move_mc(&mut rng_choose);
-
-                    let energy1000_diff = self.calc_energy_change_by_move(move_from, move_to);
-
-                    if self.is_acceptance_criteria_fulfilled(
-                        energy1000_diff,
-                        &mut rng_choose,
-                        iiter,
-                        cut_off_perc,
-                    ) {
-                        self.perform_move(
-                            move_from,
-                            move_to,
-                            energy1000_diff,
-                            is_recording_sections,
-                        );
-                        self.update_possible_moves(move_from, move_to, &simtype);
-                        if let Some(map) = &mut self.heat_map {
-                            map[move_to as usize] += 1;
-                            map[move_from as usize] += 1;
-                        }
-                    }
-                }
-                SimType::Kmc => {
-                    let (move_from, move_to, energy1000_diff, k_tot) = self
-                        .possible_moves
-                        .choose_ramdom_move_kmc(
-                            &mut rng_choose,
-                            self.calculate_current_temp(iiter, cut_off_perc),
-                        )
-                        .expect("kmc pick move failed");
-                    self.increment_time(k_tot, &mut rng_choose);
-                    self.perform_move(move_from, move_to, energy1000_diff, is_recording_sections);
-                    self.update_possible_moves(move_from, move_to, &simtype);
-                    if let Some(map) = &mut self.heat_map {
-                        map[move_to as usize] += 1;
-                        map[move_from as usize] += 1;
-                    }
-                }
+            let (move_from, move_to, energy1000_diff, k_tot) = self
+                .possible_moves
+                .choose_ramdom_move_kmc(
+                    &mut rng_choose,
+                    self.calculate_current_temp(iiter, cut_off_perc),
+                )
+                .expect("kmc pick move failed");
+            self.increment_time(k_tot, &mut rng_choose);
+            self.perform_move(move_from, move_to, energy1000_diff, is_recording_sections);
+            self.update_possible_moves(move_from, move_to);
+            if let Some(map) = &mut self.heat_map {
+                map[move_to as usize] += 1;
+                map[move_from as usize] += 1;
             }
             self.cond_snap_and_heat_map(&iiter);
 
@@ -901,7 +862,7 @@ impl Simulation {
         }
     }
 
-    fn update_possible_moves(&mut self, move_from: u32, move_to: u32, simtype: &SimType) {
+    fn update_possible_moves(&mut self, move_from: u32, move_to: u32) {
         self.possible_moves.remove_item(move_from, move_to);
         for neighbor_atom in self.gridstructure.nn[&move_from] {
             if self.occ[neighbor_atom as usize] == 0 {
@@ -910,12 +871,8 @@ impl Simulation {
             if self.occ[neighbor_atom as usize] == 1 {
                 // greater than one because of neighbor moving in this spot
                 if self.cn_metal[move_from as usize] > 1 {
-                    let energy_change = match simtype {
-                        SimType::Kmc => {
-                            Some(self.calc_energy_change_by_move(neighbor_atom, move_from))
-                        }
-                        SimType::Mc => None,
-                    };
+                    let energy_change =
+                        Some(self.calc_energy_change_by_move(neighbor_atom, move_from));
                     self.possible_moves
                         .add_item(neighbor_atom, move_from, energy_change);
                 }
@@ -929,12 +886,8 @@ impl Simulation {
             if self.occ[empty_neighbor as usize] == 0 {
                 // greater than one because of neighbor moving in this spot
                 if self.cn_metal[empty_neighbor as usize] > 1 {
-                    let energy_change = match simtype {
-                        SimType::Kmc => {
-                            Some(self.calc_energy_change_by_move(move_to, empty_neighbor))
-                        }
-                        SimType::Mc => None,
-                    };
+                    let energy_change =
+                        Some(self.calc_energy_change_by_move(move_to, empty_neighbor));
                     self.possible_moves
                         .add_item(move_to, empty_neighbor, energy_change);
                 }
@@ -1256,8 +1209,4 @@ mod tests {
 enum FromOrTo {
     From,
     To,
-}
-pub enum SimType {
-    Mc,
-    Kmc,
 }
