@@ -6,8 +6,16 @@ use std::collections::HashMap;
 #[derive(Clone)]
 pub struct ListDict {
     move_to_position: HashMap<u64, usize, ahash::RandomState>,
-    pub moves: Vec<(u32, u32, Option<i64>)>, // [(from, to, energy_change)]
-    total_k: Option<f64>,
+    pub moves: Vec<Move>, // [(from, to, energy_change)]
+    total_k: f64,
+}
+
+#[derive(Clone)]
+pub struct Move {
+    from: u32,
+    pub to: u32,
+    energy: i64,
+    k: f64,
 }
 
 impl ListDict {
@@ -19,32 +27,37 @@ impl ListDict {
         ListDict {
             move_to_position: item_to_position,
             moves: Vec::with_capacity((largest_atom_position * 3) as usize),
-            total_k: None,
+            total_k: f64::INFINITY,
         }
     }
 
     pub fn calc_total_k_change(&mut self, temp: f64) {
-        self.total_k = Some(
-            self.iter()
-                .map(|(_, _, energy_change)| {
-                    // println!(
-                    //     "energy_change: {} K: {}",
-                    //     energy_change.unwrap(),
-                    //     arrhenius_equation(energy_change.unwrap(), temp)
-                    // );
-                    arrhenius_equation(energy_change.unwrap(), temp)
-                })
-                .sum::<f64>(),
-        )
+        self.total_k = self
+            .iter()
+            .map(|mmove| {
+                // println!(
+                //     "energy_change: {} K: {}",
+                //     energy_change.unwrap(),
+                //     arrhenius_equation(energy_change.unwrap(), temp)
+                // );
+                mmove.k
+                // tst_rate_calculation(mmove.energy, temp)
+            })
+            .sum::<f64>()
     }
 
-    pub fn add_item(&mut self, move_from: u32, move_to: u32, energy_change: Option<i64>) {
+    pub fn add_item(&mut self, move_from: u32, move_to: u32, energy_change: i64, temperature: f64) {
         match self
             .move_to_position
             .entry((move_from as u64 + ((move_to as u64) << 32)))
         {
             std::collections::hash_map::Entry::Vacant(e) => {
-                self.moves.push((move_from, move_to, energy_change));
+                self.moves.push(Move {
+                    from: move_from,
+                    to: move_to,
+                    energy: energy_change,
+                    k: tst_rate_calculation(energy_change, temperature),
+                });
                 e.insert(self.moves.len() - 1);
             }
             _ => return,
@@ -56,17 +69,36 @@ impl ListDict {
             .move_to_position
             .remove(&(move_from as u64 + ((move_to as u64) << 32)))
         {
-            let (move_from, move_to, energy_change) = self.moves.pop().unwrap();
+            let mmove = self.moves.pop().unwrap();
             if position != self.moves.len() {
-                self.moves[position] = (move_from, move_to, energy_change);
-                self.move_to_position
-                    .insert((move_from as u64 + ((move_to as u64) << 32)), position);
+                let old_move = std::mem::replace(&mut self.moves[position], mmove);
+                // self.moves[position] = mmove;
+                self.move_to_position.insert(
+                    (self.moves[position].from as u64 + ((self.moves[position].to as u64) << 32)),
+                    position,
+                );
             }
         }
     }
 
-    pub fn choose_random_move_mc(&self, rng_choose: &mut SmallRng) -> (u32, u32, Option<i64>) {
-        self.moves.choose(rng_choose).unwrap().clone()
+    pub fn update_k_if_move_exists(
+        &mut self,
+        move_from: u32,
+        move_to: u32,
+        new_energy: i64,
+        temperature: f64,
+    ) {
+        if let Some(position) = self
+            .move_to_position
+            .get(&(move_from as u64 + ((move_to as u64) << 32)))
+        {
+            let old_energy = std::mem::replace(&mut self.moves[*position].energy, new_energy);
+            let new_k = tst_rate_calculation(new_energy, temperature);
+            self.total_k += new_k;
+            let old_k = std::mem::replace(&mut self.moves[*position].k, new_k);
+
+            self.total_k -= old_k;
+        }
     }
 
     pub fn choose_ramdom_move_kmc(
@@ -74,21 +106,22 @@ impl ListDict {
         rng_choose: &mut SmallRng,
         temp: f64,
     ) -> Option<(u32, u32, i64, f64)> {
-        self.calc_total_k_change(temp);
+        // self.calc_total_k_change(temp);
         let between = Uniform::new_inclusive(0., 1.);
-        let k_time_rng = between.sample(rng_choose) * self.total_k.unwrap();
+        let k_time_rng = between.sample(rng_choose) * self.total_k;
         let mut cur_k = 0_f64;
         let mut res: Option<(u32, u32, i64, f64)> = None;
-        self.iter().for_each(|(from, to, energy_change)| {
-            cur_k += arrhenius_equation(energy_change.expect("no energy change in ListDict"), temp);
+        for mmove in self.iter() {
+            cur_k += mmove.k;
             if cur_k >= k_time_rng {
-                res = Some((*from, *to, energy_change.unwrap(), self.total_k.unwrap()))
+                res = Some((mmove.from, mmove.to, mmove.energy, self.total_k));
+                break;
             }
-        });
+        }
         res
     }
 
-    pub fn iter(&self) -> std::slice::Iter<'_, (u32, u32, Option<i64>)> {
+    pub fn iter(&self) -> std::slice::Iter<'_, Move> {
         self.moves.iter()
     }
 
@@ -127,7 +160,7 @@ impl ListDict {
     }
 }
 
-fn arrhenius_equation(energy: i64, temperature: f64) -> f64 {
+fn tst_rate_calculation(energy: i64, temperature: f64) -> f64 {
     let e_use = if energy.is_negative() { 0 } else { energy };
     const e_barrier: i64 = 1;
     const KB_joul: f64 = 1.380649e-23;
