@@ -110,6 +110,9 @@ struct Args {
     #[arg(long, default_value_t = false)]
     heat_map: bool,
 
+    #[arg(long, default_value_t = false)]
+    coating: bool,
+
     #[arg(short, long, value_delimiter = '/', default_values_t = vec!(1,2))]
     optimization_cut_off_fraction: Vec<u64>,
 
@@ -172,6 +175,7 @@ fn main() {
         nnn_pair_no_int_file,
     ) = file_paths(args.grid_folder);
 
+    let coating: bool = args.coating;
     let niter_str = args.iterations;
     let niter = fmt_scient(&niter_str);
     let mut write_snap_shots: bool = args.write_snap_shots;
@@ -231,6 +235,7 @@ fn main() {
                 energy,
                 support_indices,
                 gridstructure_arc,
+                coating,
             );
             let exp = sim.run(unique_levels);
             sim.write_exp_file(&exp);

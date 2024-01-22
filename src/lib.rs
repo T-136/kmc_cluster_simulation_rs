@@ -32,9 +32,9 @@ const GCN: usize = 145;
 const NN_PAIR_NUMBER: usize = 20;
 const NN_PAIR_NO_INTERSEC_NUMBER: usize = 7;
 const NNN_PAIR_NO_INTERSEC_NUMBER: usize = 20;
-const AMOUNT_SECTIONS: usize = 10000;
+const AMOUNT_SECTIONS: usize = 1000;
 
-const GRID_SIZE: [u32; 3] = [9, 9, 9];
+const GRID_SIZE: [u32; 3] = [20, 20, 20];
 
 const SAVE_ENTIRE_SIM: bool = true;
 
@@ -77,6 +77,7 @@ impl Simulation {
         energy: EnergyInput,
         support_indices: Option<Vec<u32>>,
         gridstructure: Arc<GridStructure>,
+        coating: bool,
     ) -> Simulation {
         let nsites: u32 = GRID_SIZE[0] * GRID_SIZE[1] * GRID_SIZE[2] * 4;
         let mut cn_dict: [u32; CN + 1] = [0; CN + 1];
@@ -94,6 +95,7 @@ impl Simulation {
                 &gridstructure.nn,
                 nsites,
                 support_indices,
+                coating,
             );
             (occ, onlyocc, number_of_atom)
         } else {
@@ -104,13 +106,13 @@ impl Simulation {
         for o in 0..nsites {
             let mut neighbors: u8 = 0;
             for o1 in gridstructure.nn[&o].iter() {
-                if occ[*o1 as usize] == 1 {
+                if occ[*o1 as usize] != 0 {
                     // cn.entry(o).and_modify(|x| *x += 1).or_insert(1);
                     neighbors += 1;
                 }
             }
             cn_metal.push(neighbors as usize);
-            if occ[o as usize] == 1 {
+            if occ[o as usize] != 0 {
                 cn_dict[cn_metal[o as usize]] += 1;
             };
         }
@@ -118,7 +120,7 @@ impl Simulation {
         for o in 0..nsites {
             let mut gcn: usize = 0;
             for o1 in gridstructure.nn[&o].iter() {
-                if occ[*o1 as usize] == 1 {
+                if occ[*o1 as usize] != 0 {
                     gcn += cn_metal[*o1 as usize];
                 }
             }
@@ -232,15 +234,17 @@ impl Simulation {
                 lowest_e_onlyocc = x;
             };
         }
-        for o in self.onlyocc.iter() {
-            for u in &self.gridstructure.nn[o] {
-                if self.occ[*u as usize] == 0 {
-                    // >1 so that atoms cant leave the cluster
-                    // <x cant move if all neighbors are occupied
-                    if self.cn_metal[*u as usize] > 1 {
-                        let energy = self.calc_energy_change_by_move(*o, *u);
-                        self.possible_moves
-                            .add_item(*o, *u, energy, self.temperature)
+        for (i, o) in self.occ.iter().enumerate() {
+            if *o != 0 {
+                for u in &self.gridstructure.nn[&(i as u32)] {
+                    if self.occ[*u as usize] == 0 {
+                        // >1 so that atoms cant leave the cluster
+                        // <x cant move if all neighbors are occupied
+                        if self.cn_metal[*u as usize] > 1 {
+                            let energy = self.calc_energy_change_befor_move(i as u32, *u);
+                            self.possible_moves
+                                .add_item(i as u32, *u, energy, self.temperature)
+                        }
                     }
                 }
             }
@@ -272,7 +276,7 @@ impl Simulation {
                     *x = 0;
                 });
                 for o in 0..self.cn_metal.len() {
-                    if self.occ[o] == 1 {
+                    if self.occ[o] != 0 {
                         self.cn_dict[self.cn_metal[o]] += 1;
                     };
                 }
@@ -343,6 +347,12 @@ impl Simulation {
             wtr.flush().unwrap();
         }
 
+        let duration = sim::Duration {
+            sec: self.sim_time,
+            hour: self.sim_time / 60. / 60.,
+            days: self.sim_time / 60. / 60. / 24.,
+        };
+
         Results {
             start,
             lowest_energy_struct,
@@ -350,11 +360,13 @@ impl Simulation {
             energy_section_list: self.energy_sections_list.clone(),
             cn_dict_sections: self.cn_dict_sections.clone(),
             unique_levels: self.unique_levels.clone(),
+            duration,
         }
     }
     fn increment_time(&mut self, k_tot: f64, rng_e_number: &mut SmallRng) {
         let between = Uniform::new_inclusive(0., 1.);
         let rand_value: f64 = between.sample(rng_e_number);
+        // println!("k_tot: {}, rand_value ln: {}", k_tot, rand_value.ln());
         self.sim_time -= rand_value.ln() / k_tot
     }
 
@@ -475,7 +487,7 @@ impl Simulation {
         // let (from_change, to_change) = self.no_int_from_move(move_from, move_to);
         for o in self.gridstructure.nn[&move_from] {
             if (SAVE_ENTIRE_SIM || is_recording_sections)
-                && self.occ[o as usize] == 1
+                && self.occ[o as usize] != 0
                 && o != move_to
             {
                 self.cn_dict[self.cn_metal[o as usize]] -= 1;
@@ -485,7 +497,7 @@ impl Simulation {
         }
         for o in self.gridstructure.nn[&move_to] {
             if (SAVE_ENTIRE_SIM || is_recording_sections)
-                && self.occ[o as usize] == 1
+                && self.occ[o as usize] != 0
                 && o != move_from
             {
                 self.cn_dict[self.cn_metal[o as usize]] -= 1;
@@ -607,13 +619,25 @@ impl Simulation {
 
         self.total_energy_1000 += energy1000_diff;
     }
+    fn calc_energy_change_befor_move(&self, move_from: u32, move_to: u32) -> i64 {
+        match self.energy {
+            EnergyInput::LinearCn(energy_l_cn) => energy::energy_diff_l_cn(
+                energy_l_cn,
+                self.cn_metal[move_from as usize],
+                self.cn_metal[move_to as usize] - 1_usize,
+            ),
+            EnergyInput::Cn(_) => todo!(),
+            EnergyInput::LinearGcn(_) => todo!(),
+            EnergyInput::Gcn(_) => todo!(),
+        }
+    }
 
     fn calc_energy_change_by_move(&self, move_from: u32, move_to: u32) -> i64 {
         match self.energy {
             EnergyInput::LinearCn(energy_l_cn) => energy::energy_diff_l_cn(
                 energy_l_cn,
                 self.cn_metal[move_from as usize],
-                self.cn_metal[move_to as usize] - 1_usize,
+                self.cn_metal[move_to as usize] - 1,
             ),
             EnergyInput::Cn(energy_cn) => {
                 let (from_change, to_change) = no_int_nn_from_move(
@@ -626,11 +650,11 @@ impl Simulation {
                     energy_cn,
                     from_change
                         .iter()
-                        .filter(|x| self.occ[**x as usize] == 1)
+                        .filter(|x| self.occ[**x as usize] != 0)
                         .map(|x| self.cn_metal[*x as usize]),
                     to_change
                         .iter()
-                        .filter(|x| self.occ[**x as usize] == 1)
+                        .filter(|x| self.occ[**x as usize] != 0)
                         .map(|x| self.cn_metal[*x as usize]),
                     self.cn_metal[move_from as usize],
                     self.cn_metal[move_to as usize],
@@ -820,10 +844,13 @@ impl Simulation {
                     // for neigbor in self.gridstructure.nn[pos] {
                     // self.update_k(*pos, &self.gridstructure.nn[pos]);
                     for neigbor in &self.gridstructure.nn[pos] {
-                        if (self.occ[*pos as usize] != 0 || pos == &move_to || pos == &move_from)
-                            && (self.occ[*neigbor as usize] == 0
-                                || neigbor == &move_to
-                                || neigbor == &move_from)
+                        // if (self.occ[*pos as usize] != 0 && pos != &move_to && pos != &move_from)
+                        if (self.occ[*pos as usize] != 0)
+                            && (
+                                self.occ[*neigbor as usize] == 0
+                                // && neigbor != &move_to
+                                // && neigbor != &move_from)
+                            )
                         {
                             let new_energy = self.calc_energy_change_by_move(*pos, *neigbor);
                             self.possible_moves.update_k_if_move_exists(
@@ -833,10 +860,13 @@ impl Simulation {
                                 self.temperature,
                             );
                         }
-                        if (self.occ[*pos as usize] == 0 || pos == &move_to || pos == &move_from)
-                            && (self.occ[*neigbor as usize] != 0
-                                || neigbor == &move_to
-                                || neigbor == &move_from)
+                        // if (self.occ[*pos as usize] == 0 && pos != &move_to && pos != &move_from)
+                        if (self.occ[*pos as usize] == 0)
+                            && (
+                                self.occ[*neigbor as usize] != 0
+                                // && neigbor != &move_to
+                                // && neigbor != &move_from)
+                            )
                         {
                             let new_energy = self.calc_energy_change_by_move(*neigbor, *pos);
                             self.possible_moves.update_k_if_move_exists(
@@ -881,7 +911,7 @@ impl Simulation {
             if self.occ[neighbor_atom as usize] == 0 {
                 self.possible_moves.remove_item(move_from, neighbor_atom);
             }
-            if self.occ[neighbor_atom as usize] == 1 {
+            if self.occ[neighbor_atom as usize] != 0 {
                 // greater than one because of neighbor moving in this spot
                 if self.cn_metal[move_from as usize] > 1 {
                     let energy_change = self.calc_energy_change_by_move(neighbor_atom, move_from);
@@ -896,7 +926,7 @@ impl Simulation {
         }
 
         for empty_neighbor in self.gridstructure.nn[&move_to] {
-            if self.occ[empty_neighbor as usize] == 1 {
+            if self.occ[empty_neighbor as usize] != 0 {
                 self.possible_moves.remove_item(empty_neighbor, move_to);
             }
             if self.occ[empty_neighbor as usize] == 0 {

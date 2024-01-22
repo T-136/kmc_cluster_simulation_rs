@@ -49,8 +49,17 @@ impl Start {
 
 #[serde_as]
 #[derive(Serialize, Deserialize)]
+pub struct Duration {
+    pub sec: f64,
+    pub hour: f64,
+    pub days: f64,
+}
+
+#[serde_as]
+#[derive(Serialize, Deserialize)]
 pub struct Results {
     pub start: Start,
+    pub duration: Duration,
     pub lowest_energy_struct: LowestEnergy,
     pub number_all_atoms: u32,
     pub energy_section_list: Vec<f64>,

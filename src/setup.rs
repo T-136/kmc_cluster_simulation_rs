@@ -59,6 +59,7 @@ pub fn create_input_cluster(
     nn: &HashMap<u32, [u32; 12], FnvBuildHasher>,
     nsites: u32,
     support_indices: Option<Vec<u32>>,
+    coating: bool,
 ) -> (Vec<u8>, HashSet<u32, FnvBuildHasher>, Option<Vec<u32>>) {
     let center_of_mass: [f64; 3] = {
         let mut d: [Vec<f64>; 3] = [Vec::new(), Vec::new(), Vec::new()];
@@ -145,9 +146,20 @@ pub fn create_input_cluster(
             break;
         }
     }
-
     for site in onlyocc.iter() {
         occ[*site as usize] = 1_u8;
+    }
+    if coating {
+        let mut all_neigbors = Vec::new();
+        for atom in onlyocc.iter() {
+            all_neigbors.extend_from_slice(&nn[atom]);
+        }
+        for neighbor in all_neigbors {
+            if occ[neighbor as usize] == 0 {
+                occ[neighbor as usize] = 2;
+                onlyocc.insert(neighbor);
+            }
+        }
     }
 
     (occ, onlyocc, nn_support)
