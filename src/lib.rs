@@ -50,10 +50,12 @@ pub struct Simulation {
     sim_time: f64,
     total_energy_1000: i64,
     cn_dict: [u32; CN + 1],
+    surface_count: Vec<f64>,
     save_folder: String,
     temperature: f64,
     cn_dict_sections: Vec<HashMap<u8, f64>>,
     energy_sections_list: Vec<f64>,
+    surface_composition: Vec<f64>,
     optimization_cut_off_fraction: Vec<u64>,
     unique_levels: HashMap<BTreeMap<u8, u32>, (i64, u64)>,
     heat_map: Option<Vec<u64>>,
@@ -102,6 +104,7 @@ impl Simulation {
             panic!("gib input atoms or input file");
         };
         let mut cn_metal: Vec<usize> = Vec::with_capacity(nsites as usize);
+        let mut surface_count = vec![0.; 3];
 
         for o in 0..nsites {
             let mut neighbors: u8 = 0;
@@ -114,6 +117,9 @@ impl Simulation {
             cn_metal.push(neighbors as usize);
             if occ[o as usize] != 0 {
                 cn_dict[cn_metal[o as usize]] += 1;
+                if cn_metal[o as usize] != 12 {
+                    surface_count[occ[o as usize] as usize] += 1.;
+                }
             };
         }
         let mut gcn_metal: Vec<usize> = Vec::with_capacity(nsites as usize);
@@ -185,6 +191,8 @@ impl Simulation {
 
         let heat_map_sections: Vec<Vec<u64>> = Vec::new();
 
+        let surface_composition: Vec<f64> = Vec::new();
+
         Simulation {
             niter,
             number_all_atoms,
@@ -200,6 +208,8 @@ impl Simulation {
             temperature,
             cn_dict_sections,
             energy_sections_list,
+            surface_composition,
+            surface_count,
             optimization_cut_off_fraction,
             unique_levels,
             snap_shot_sections,
@@ -220,6 +230,7 @@ impl Simulation {
         let mut lowest_energy_struct = sim::LowestEnergy::default();
 
         let mut temp_energy_section: i64 = 0;
+        let mut temp_surface_composition: f64 = 0.;
         let mut temp_cn_dict_section: [u64; CN + 1] = [0; CN + 1];
 
         let start = sim::Start::new(self.total_energy_1000, &self.cn_dict);
@@ -305,9 +316,10 @@ impl Simulation {
             }
 
             if SAVE_ENTIRE_SIM || is_recording_sections {
-                temp_energy_section = self.save_sections(
+                (temp_energy_section, temp_surface_composition) = self.save_sections(
                     &iiter,
                     temp_energy_section,
+                    temp_surface_composition,
                     &mut temp_cn_dict_section,
                     &mut amount_unique_levels,
                     section_size,
@@ -357,6 +369,7 @@ impl Simulation {
             start,
             lowest_energy_struct,
             number_all_atoms: self.number_all_atoms,
+            surface_composition: self.surface_composition.clone(),
             energy_section_list: self.energy_sections_list.clone(),
             cn_dict_sections: self.cn_dict_sections.clone(),
             unique_levels: self.unique_levels.clone(),
@@ -380,13 +393,15 @@ impl Simulation {
         &mut self,
         iiter: &u64,
         mut temp_energy_section_1000: i64,
+        mut temp_surface_composition: f64,
         temp_cn_dict_section: &mut [u64; CN + 1],
         amount_unique_levels: &mut i32,
         section_size: u64,
         SAVE_TH: u64,
-    ) -> i64 {
+    ) -> (i64, f64) {
         if (iiter + 1) % SAVE_TH == 0 {
             temp_energy_section_1000 += self.total_energy_1000;
+            temp_surface_composition += self.surface_count[1] * 100. / self.surface_count[2];
 
             temp_cn_dict_section
                 .iter_mut()
@@ -422,7 +437,6 @@ impl Simulation {
         if (iiter + 1) % section_size == 0 {
             self.energy_sections_list
                 .push(temp_energy_section_1000 as f64 / (section_size / SAVE_TH) as f64 / 1000.);
-            temp_energy_section_1000 = 0;
 
             let mut section: HashMap<u8, f64> = HashMap::new();
             for (k, list) in temp_cn_dict_section.iter_mut().enumerate() {
@@ -430,9 +444,14 @@ impl Simulation {
                 *list = 0;
             }
             assert_eq!(temp_cn_dict_section, &mut [0_u64; CN + 1]);
-            self.cn_dict_sections.push(section.clone())
+            self.cn_dict_sections.push(section.clone());
+
+            self.surface_composition
+                .push(temp_surface_composition as f64 / (section_size / SAVE_TH) as f64 / 1000.);
+
+            return (0, 0.);
         }
-        temp_energy_section_1000
+        (temp_energy_section_1000, temp_surface_composition)
     }
 
     fn opt_save_lowest_energy(
@@ -475,6 +494,9 @@ impl Simulation {
         energy1000_diff: i64,
         is_recording_sections: bool,
     ) {
+        let (from_change, to_change) =
+            no_int_nn_from_move(move_from, move_to, &self.gridstructure.nn_pair_no_intersec);
+
         self.occ[move_to as usize] = self.occ[move_from as usize]; // covers different alloys also
         self.occ[move_from as usize] = 0;
 
@@ -484,27 +506,45 @@ impl Simulation {
         if SAVE_ENTIRE_SIM || is_recording_sections {
             self.cn_dict[self.cn_metal[move_from as usize]] -= 1;
         }
-        // let (from_change, to_change) = self.no_int_from_move(move_from, move_to);
-        for o in self.gridstructure.nn[&move_from] {
+        // for o in self.gridstructure.nn[&move_from] {
+        for o in from_change {
             if (SAVE_ENTIRE_SIM || is_recording_sections)
                 && self.occ[o as usize] != 0
                 && o != move_to
             {
                 self.cn_dict[self.cn_metal[o as usize]] -= 1;
                 self.cn_dict[self.cn_metal[o as usize] - 1] += 1;
+
+                // self.surface_count[self.occ[o as usize] as usize] -=
+                //     one_if_12(self.cn_metal[o as usize]);
+                if self.cn_metal[o as usize] == 12 {
+                    self.surface_count[(self.occ[o as usize]) as usize] += 1.;
+                }
             }
             self.cn_metal[o as usize] -= 1;
         }
-        for o in self.gridstructure.nn[&move_to] {
+        for o in to_change {
+            // for o in self.gridstructure.nn[&move_to] {
             if (SAVE_ENTIRE_SIM || is_recording_sections)
                 && self.occ[o as usize] != 0
                 && o != move_from
             {
                 self.cn_dict[self.cn_metal[o as usize]] -= 1;
                 self.cn_dict[self.cn_metal[o as usize] + 1] += 1;
+
+                if self.cn_metal[o as usize] == 11 {
+                    self.surface_count[(self.occ[o as usize]) as usize] -= 1.;
+                }
             }
             self.cn_metal[o as usize] += 1;
         }
+
+        self.cn_metal[move_to as usize] -= 1;
+        self.cn_metal[move_from as usize] += 1;
+
+        // if SAVE_ENTIRE_SIM || is_recording_sections {
+        //     self.cn_dict[self.cn_metal[move_to as usize]] += 1;
+        // }
 
         match self.energy {
             EnergyInput::LinearCn(_) | EnergyInput::Cn(_) => {}
@@ -1257,4 +1297,11 @@ pub fn find_simulation_with_lowest_energy(folder: String) -> anyhow::Result<()> 
 enum FromOrTo {
     From,
     To,
+}
+fn one_if_12(cn: usize) -> f64 {
+    if cn != 12 {
+        1.
+    } else {
+        0.
+    }
 }
