@@ -51,6 +51,7 @@ pub struct Simulation {
     total_energy_1000: i64,
     cn_dict: [u32; CN + 1],
     surface_count: Vec<f64>,
+    time_per_section: Vec<f64>,
     save_folder: String,
     temperature: f64,
     cn_dict_sections: Vec<HashMap<u8, f64>>,
@@ -193,6 +194,8 @@ impl Simulation {
 
         let surface_composition: Vec<f64> = Vec::new();
 
+        let time_per_section: Vec<f64> = Vec::new();
+
         Simulation {
             niter,
             number_all_atoms,
@@ -209,6 +212,7 @@ impl Simulation {
             cn_dict_sections,
             energy_sections_list,
             surface_composition,
+            time_per_section,
             surface_count,
             optimization_cut_off_fraction,
             unique_levels,
@@ -260,6 +264,7 @@ impl Simulation {
                 }
             }
         }
+
         self.possible_moves.calc_total_k_change(self.temperature);
 
         let section_size: u64 = self.niter / AMOUNT_SECTIONS as u64;
@@ -371,7 +376,8 @@ impl Simulation {
             number_all_atoms: self.number_all_atoms,
             surface_composition: self.surface_composition.clone(),
             energy_section_list: self.energy_sections_list.clone(),
-            cn_dict_sections: self.cn_dict_sections.clone(),
+            time_per_section: self.time_per_section.clone(),
+            // cn_dict_sections: self.cn_dict_sections.clone(),
             unique_levels: self.unique_levels.clone(),
             duration,
         }
@@ -448,6 +454,8 @@ impl Simulation {
 
             self.surface_composition
                 .push(temp_surface_composition as f64 / (section_size / SAVE_TH) as f64 / 1000.);
+
+            self.time_per_section.push(self.sim_time);
 
             return (0, 0.);
         }

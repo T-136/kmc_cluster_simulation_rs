@@ -62,9 +62,10 @@ pub struct Results {
     pub duration: Duration,
     pub lowest_energy_struct: LowestEnergy,
     pub number_all_atoms: u32,
+    pub time_per_section: Vec<f64>,
     pub surface_composition: Vec<f64>,
     pub energy_section_list: Vec<f64>,
-    pub cn_dict_sections: Vec<HashMap<u8, f64>>,
+    // pub cn_dict_sections: Vec<HashMap<u8, f64>>,
     #[serde_as(as = "Vec<(_, _)>")]
     pub unique_levels: HashMap<BTreeMap<u8, u32>, (i64, u64)>,
 }
