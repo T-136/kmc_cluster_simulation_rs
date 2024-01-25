@@ -249,6 +249,15 @@ impl Simulation {
                 lowest_e_onlyocc = x;
             };
         }
+        if let Some(snap_shot_sections) = &mut self.snap_shot_sections {
+            let mut t_vec = vec![0; self.occ.len()];
+            t_vec
+                .iter_mut()
+                .enumerate()
+                .for_each(|(i, x)| *x = self.occ[i]);
+            snap_shot_sections.push(t_vec);
+        }
+
         for (i, o) in self.occ.iter().enumerate() {
             if *o != 0 {
                 for u in &self.gridstructure.nn[&(i as u32)] {

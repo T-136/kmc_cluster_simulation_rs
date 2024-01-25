@@ -187,7 +187,6 @@ fn tst_rate_calculation(energy_1000: i64, temperature: f64) -> f64 {
     };
     const e_barrier: i64 = 1;
     const KB_joul: f64 = 1.380649e-23;
-    // const R: f64 = 8.31446261815324;
     const h_joul: f64 = 6.62607015e-34;
     const KB_eV: f64 = 8.6173324e-5;
     (KB_joul * temperature / h_joul)
