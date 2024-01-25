@@ -249,14 +249,6 @@ impl Simulation {
                 lowest_e_onlyocc = x;
             };
         }
-        if let Some(snap_shot_sections) = &mut self.snap_shot_sections {
-            let mut t_vec = vec![0; self.occ.len()];
-            t_vec
-                .iter_mut()
-                .enumerate()
-                .for_each(|(i, x)| *x = self.occ[i]);
-            snap_shot_sections.push(t_vec);
-        }
 
         for (i, o) in self.occ.iter().enumerate() {
             if *o != 0 {
@@ -306,6 +298,7 @@ impl Simulation {
                     };
                 }
             };
+            self.cond_snap_and_heat_map(&iiter);
 
             let (move_from, move_to, energy1000_diff, k_tot) = self
                 .possible_moves
@@ -319,7 +312,6 @@ impl Simulation {
                 map[move_to as usize] += 1;
                 map[move_from as usize] += 1;
             }
-            self.cond_snap_and_heat_map(&iiter);
 
             if iiter * self.optimization_cut_off_fraction[1]
                 >= self.niter * self.optimization_cut_off_fraction[0]
@@ -1005,10 +997,7 @@ impl Simulation {
         const NUMBER_HEAT_MAP_SECTIONS: u64 = 200;
 
         if let Some(snap_shot_sections) = &mut self.snap_shot_sections {
-            if (iiter + 1) % (self.niter / NUMBER_HEAT_MAP_SECTIONS) == 0 {
-                if iiter == &0 {
-                    return;
-                }
+            if (iiter) % (self.niter / NUMBER_HEAT_MAP_SECTIONS) == 0 {
                 let mut t_vec = vec![0; self.occ.len()];
                 t_vec
                     .iter_mut()
@@ -1019,10 +1008,7 @@ impl Simulation {
         }
 
         if let Some(heat_map) = &mut self.heat_map {
-            if (iiter + 1) % (self.niter / NUMBER_HEAT_MAP_SECTIONS) == 0 {
-                if iiter == &0 {
-                    return;
-                }
+            if (iiter) % (self.niter / NUMBER_HEAT_MAP_SECTIONS) == 0 {
                 let mut t_vec = vec![0; heat_map.len()];
                 t_vec
                     .iter_mut()
