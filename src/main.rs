@@ -1,10 +1,13 @@
 use clap::ArgGroup;
 use clap::Parser;
 use core::panic;
+use csv::Reader;
+use csv::ReaderBuilder;
 use mc::energy::EnergyInput;
 use mc::GridStructure;
 use mc::Simulation;
 use std::fs;
+use std::path::Path;
 use std::sync::Arc;
 use std::thread;
 use std::usize;
@@ -23,27 +26,46 @@ fn fmt_scient(num: &str) -> u64 {
         * base.pow(exp.parse::<u32>().expect("wrong iterations input"))
 }
 
-fn collect_energy_values<const N: usize>(mut energy_vec: [i64; N], inp: String) -> [i64; N] {
-    let contents = if inp.chars().next().unwrap().is_numeric() || inp.starts_with('-') {
-        inp
+fn collect_energy_values<const N: usize>(mut energy_vec: [i64; N], inp: String) -> Vec<[i64; N]> {
+    if inp.chars().next().unwrap().is_numeric() || inp.starts_with('-') {
+        let mut string_iter = inp.trim().split(',');
+        for x in energy_vec.iter_mut() {
+            *x = string_iter
+                .next()
+                .unwrap()
+                .trim()
+                .parse::<i64>()
+                .unwrap_or_else(|err| {
+                    panic!(
+                        "iter received from input file: {:?}, err: {}",
+                        string_iter, err
+                    )
+                });
+        }
+        vec![energy_vec]
     } else {
-        fs::read_to_string(inp).expect("can't find energy file")
-    };
-    let mut string_iter = contents.trim().split(',');
-    for x in energy_vec.iter_mut() {
-        *x = string_iter
-            .next()
-            .unwrap()
-            .trim()
-            .parse::<i64>()
-            .unwrap_or_else(|err| {
-                panic!(
-                    "iter received from input file: {:?}, err: {}",
-                    string_iter, err
-                )
-            });
+        let s = fs::read_to_string(inp.clone()).expect("can't find energy file");
+        println!("{}", s);
+        let mut rdr = ReaderBuilder::new()
+            .delimiter(b',')
+            .has_headers(false)
+            .from_path(Path::new(&inp));
+        let mut energy_vec = Vec::new();
+
+        // println!("{:?}", record);
+
+        for line in rdr.unwrap().into_deserialize::<Vec<i64>>() {
+            // println!("{}", line.unwrap().clone());
+            let mut line_values: [i64; N] = [0; N];
+            println!("{:?}", line);
+            for (i, value) in line.unwrap().iter().enumerate() {
+                println!("{}", value);
+                line_values[i] = *value;
+            }
+            energy_vec.push(line_values);
+        }
+        energy_vec
     }
-    energy_vec
 }
 
 #[derive(Parser, Debug)]

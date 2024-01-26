@@ -135,18 +135,24 @@ impl Simulation {
         }
 
         let mut total_energy_1000: i64 = 0;
-        let mut possible_moves: listdict::ListDict = listdict::ListDict::new(GRID_SIZE);
+        let possible_moves: listdict::ListDict = listdict::ListDict::new(GRID_SIZE);
         for o in onlyocc.iter() {
             match energy {
                 EnergyInput::LinearCn(_) | EnergyInput::Cn(_) => {
-                    let energy_1000: i64 =
-                        energy::energy_1000_calculation(&energy, cn_metal[*o as usize]);
+                    let energy_1000: i64 = energy::energy_1000_calculation(
+                        &energy,
+                        cn_metal[*o as usize],
+                        occ[*o as usize] as usize,
+                    );
                     total_energy_1000 += energy_1000;
                 }
 
                 EnergyInput::LinearGcn(_) | EnergyInput::Gcn(_) => {
-                    total_energy_1000 +=
-                        energy::energy_1000_calculation(&energy, gcn_metal[*o as usize])
+                    total_energy_1000 += energy::energy_1000_calculation(
+                        &energy,
+                        gcn_metal[*o as usize],
+                        occ[*o as usize] as usize,
+                    )
                 }
             };
 
@@ -257,7 +263,7 @@ impl Simulation {
                         // >1 so that atoms cant leave the cluster
                         // <x cant move if all neighbors are occupied
                         if self.cn_metal[*u as usize] > 1 {
-                            let energy = self.calc_energy_change_befor_move(i as u32, *u);
+                            let energy = self.calc_energy_change_befor_move(i as u32, *u, *o);
                             self.possible_moves
                                 .add_item(i as u32, *u, energy, self.temperature)
                         }
@@ -668,12 +674,18 @@ impl Simulation {
 
         self.total_energy_1000 += energy1000_diff;
     }
-    fn calc_energy_change_befor_move(&self, move_from: u32, move_to: u32) -> i64 {
-        match self.energy {
+    fn calc_energy_change_befor_move(
+        &self,
+        move_from: u32,
+        move_to: u32,
+        atom_typ_index: u8,
+    ) -> i64 {
+        match &self.energy {
             EnergyInput::LinearCn(energy_l_cn) => energy::energy_diff_l_cn(
                 energy_l_cn,
                 self.cn_metal[move_from as usize],
                 self.cn_metal[move_to as usize] - 1_usize,
+                atom_typ_index as usize,
             ),
             EnergyInput::Cn(_) => todo!(),
             EnergyInput::LinearGcn(_) => todo!(),
@@ -681,12 +693,13 @@ impl Simulation {
         }
     }
 
-    fn calc_energy_change_by_move(&self, move_from: u32, move_to: u32) -> i64 {
-        match self.energy {
+    fn calc_energy_change_by_move(&self, move_from: u32, move_to: u32, atom_typ_index: u8) -> i64 {
+        match &self.energy {
             EnergyInput::LinearCn(energy_l_cn) => energy::energy_diff_l_cn(
                 energy_l_cn,
                 self.cn_metal[move_from as usize],
                 self.cn_metal[move_to as usize] - 1,
+                atom_typ_index as usize,
             ),
             EnergyInput::Cn(energy_cn) => {
                 let (from_change, to_change) = no_int_nn_from_move(
@@ -707,6 +720,7 @@ impl Simulation {
                         .map(|x| self.cn_metal[*x as usize]),
                     self.cn_metal[move_from as usize],
                     self.cn_metal[move_to as usize],
+                    atom_typ_index as usize,
                 )
             }
             EnergyInput::LinearGcn(energy_l_gcn) => {
@@ -743,6 +757,7 @@ impl Simulation {
                         }),
                     self.cn_metal[move_from as usize],
                     self.cn_metal[move_to as usize],
+                    atom_typ_index as usize,
                 )
             }
             EnergyInput::Gcn(energy_gcn) => {
@@ -780,6 +795,7 @@ impl Simulation {
                         }),
                     self.gcn_metal[move_from as usize],
                     self.gcn_metal[move_to as usize] - self.cn_metal[move_from as usize] + cn_from,
+                    atom_typ_index as usize,
                 )
             }
         }
@@ -901,7 +917,11 @@ impl Simulation {
                                 // && neigbor != &move_from)
                             )
                         {
-                            let new_energy = self.calc_energy_change_by_move(*pos, *neigbor);
+                            let new_energy = self.calc_energy_change_by_move(
+                                *pos,
+                                *neigbor,
+                                self.occ[*pos as usize],
+                            );
                             self.possible_moves.update_k_if_move_exists(
                                 *pos,
                                 *neigbor,
@@ -917,7 +937,11 @@ impl Simulation {
                                 // && neigbor != &move_from)
                             )
                         {
-                            let new_energy = self.calc_energy_change_by_move(*neigbor, *pos);
+                            let new_energy = self.calc_energy_change_by_move(
+                                *neigbor,
+                                *pos,
+                                self.occ[*neigbor as usize],
+                            );
                             self.possible_moves.update_k_if_move_exists(
                                 *neigbor,
                                 *pos,
@@ -937,14 +961,15 @@ impl Simulation {
 
     fn update_k(&mut self, pos: u32, neighbors: &[u32]) {
         for neigbor in neighbors {
-            let new_energy = self.calc_energy_change_by_move(pos, *neigbor);
+            let new_energy = self.calc_energy_change_by_move(pos, *neigbor, self.occ[pos as usize]);
             self.possible_moves.update_k_if_move_exists(
                 pos,
                 *neigbor,
                 new_energy,
                 self.temperature,
             );
-            let new_energy = self.calc_energy_change_by_move(*neigbor, pos);
+            let new_energy =
+                self.calc_energy_change_by_move(*neigbor, pos, self.occ[*neigbor as usize]);
             self.possible_moves.update_k_if_move_exists(
                 *neigbor,
                 pos,
@@ -963,7 +988,11 @@ impl Simulation {
             if self.occ[neighbor_atom as usize] != 0 {
                 // greater than one because of neighbor moving in this spot
                 if self.cn_metal[move_from as usize] > 1 {
-                    let energy_change = self.calc_energy_change_by_move(neighbor_atom, move_from);
+                    let energy_change = self.calc_energy_change_by_move(
+                        neighbor_atom,
+                        move_from,
+                        self.occ[neighbor_atom as usize],
+                    );
                     self.possible_moves.add_item(
                         neighbor_atom,
                         move_from,
@@ -981,7 +1010,11 @@ impl Simulation {
             if self.occ[empty_neighbor as usize] == 0 {
                 // greater than one because of neighbor moving in this spot
                 if self.cn_metal[empty_neighbor as usize] > 1 {
-                    let energy_change = self.calc_energy_change_by_move(move_to, empty_neighbor);
+                    let energy_change = self.calc_energy_change_by_move(
+                        move_to,
+                        empty_neighbor,
+                        self.occ[move_to as usize],
+                    );
                     self.possible_moves.add_item(
                         move_to,
                         empty_neighbor,
