@@ -213,7 +213,7 @@ impl Simulation {
         }
         let composition = atom_1 as f64 / (atom_1 + atom_2) as f64;
         surface_composition
-            .push((surface_count[1] * 100) as f64 / (surface_count[1] + surface_count[2]) as f64);
+            .push(surface_count[1] as f64 / (surface_count[1] + surface_count[2]) as f64);
         time_per_section.push(0.);
 
         Simulation {
@@ -433,7 +433,7 @@ impl Simulation {
     ) -> (i64, f64) {
         if (iiter + 1) % SAVE_TH == 0 {
             temp_energy_section_1000 += self.total_energy_1000;
-            temp_surface_composition += (self.surface_count[1] * 100) as f64
+            temp_surface_composition += self.surface_count[1] as f64
                 / (self.surface_count[1] + self.surface_count[2]) as f64;
 
             temp_cn_dict_section
