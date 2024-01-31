@@ -61,6 +61,7 @@ pub struct Results {
     pub start: Start,
     pub duration: Duration,
     pub lowest_energy_struct: LowestEnergy,
+    pub composition: f64,
     pub number_all_atoms: u32,
     pub time_per_section: Vec<f64>,
     pub surface_composition: Vec<f64>,

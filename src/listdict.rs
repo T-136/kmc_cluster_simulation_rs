@@ -185,12 +185,12 @@ fn tst_rate_calculation(energy_1000: i64, temperature: f64) -> f64 {
     } else {
         energy_1000
     };
-    const e_barrier: i64 = 1;
+    const e_barrier_1000: i64 = 500;
     const KB_joul: f64 = 1.380649e-23;
     const h_joul: f64 = 6.62607015e-34;
     const KB_eV: f64 = 8.6173324e-5;
     (KB_joul * temperature / h_joul)
-        * (-(e_use + e_barrier * 1000) as f64 / (KB_eV * temperature * 1000.)).exp()
+        * (-(e_use + e_barrier_1000) as f64 / (KB_eV * temperature * 1000.)).exp()
 }
 
 // #[cfg(test)]

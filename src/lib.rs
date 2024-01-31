@@ -41,6 +41,7 @@ const SAVE_ENTIRE_SIM: bool = true;
 #[derive(Clone)]
 pub struct Simulation {
     niter: u64,
+    composition: f64,
     number_all_atoms: u32,
     occ: Vec<u8>,
     onlyocc: HashSet<u32, fnv::FnvBuildHasher>,
@@ -50,7 +51,7 @@ pub struct Simulation {
     sim_time: f64,
     total_energy_1000: i64,
     cn_dict: [u32; CN + 1],
-    surface_count: Vec<f64>,
+    surface_count: Vec<i32>,
     time_per_section: Vec<f64>,
     save_folder: String,
     temperature: f64,
@@ -91,7 +92,6 @@ impl Simulation {
             let number_of_atoms: u32 = onlyocc.len() as u32;
             (occ, onlyocc, number_of_atoms)
         } else if atoms_input.is_some() {
-            let number_of_atom = atoms_input.unwrap();
             let (occ, onlyocc, nn_support) = setup::create_input_cluster(
                 &atoms_input.unwrap(),
                 &gridstructure.xsites_positions,
@@ -100,12 +100,13 @@ impl Simulation {
                 support_indices,
                 coating,
             );
+            let number_of_atom: u32 = onlyocc.len() as u32;
             (occ, onlyocc, number_of_atom)
         } else {
             panic!("gib input atoms or input file");
         };
         let mut cn_metal: Vec<usize> = Vec::with_capacity(nsites as usize);
-        let mut surface_count = vec![0.; 3];
+        let mut surface_count = vec![0; 3];
 
         for o in 0..nsites {
             let mut neighbors: u8 = 0;
@@ -119,7 +120,7 @@ impl Simulation {
             if occ[o as usize] != 0 {
                 cn_dict[cn_metal[o as usize]] += 1;
                 if cn_metal[o as usize] != 12 {
-                    surface_count[occ[o as usize] as usize] += 1.;
+                    surface_count[occ[o as usize] as usize] += 1;
                 }
             };
         }
@@ -198,13 +199,27 @@ impl Simulation {
 
         let heat_map_sections: Vec<Vec<u64>> = Vec::new();
 
-        let surface_composition: Vec<f64> = Vec::new();
-
-        let time_per_section: Vec<f64> = Vec::new();
+        let mut time_per_section: Vec<f64> = Vec::new();
+        let mut surface_composition: Vec<f64> = Vec::new();
+        let mut atom_1 = 0;
+        let mut atom_2 = 0;
+        for o in occ.iter() {
+            if o == &1 {
+                atom_1 += 1;
+            }
+            if o == &2 {
+                atom_2 += 2;
+            }
+        }
+        let composition = atom_1 as f64 / (atom_1 + atom_2) as f64;
+        surface_composition
+            .push((surface_count[1] * 100) as f64 / (surface_count[1] + surface_count[2]) as f64);
+        time_per_section.push(0.);
 
         Simulation {
             niter,
             number_all_atoms,
+            composition,
             occ,
             onlyocc,
             cn_metal,
@@ -305,6 +320,9 @@ impl Simulation {
                 }
             };
             self.cond_snap_and_heat_map(&iiter);
+            if iiter % 100000 == 0 {
+                self.possible_moves.calc_total_k_change(self.temperature)
+            }
 
             let (move_from, move_to, energy1000_diff, k_tot) = self
                 .possible_moves
@@ -380,6 +398,7 @@ impl Simulation {
         Results {
             start,
             lowest_energy_struct,
+            composition: self.composition,
             number_all_atoms: self.number_all_atoms,
             surface_composition: self.surface_composition.clone(),
             energy_section_list: self.energy_sections_list.clone(),
@@ -414,7 +433,8 @@ impl Simulation {
     ) -> (i64, f64) {
         if (iiter + 1) % SAVE_TH == 0 {
             temp_energy_section_1000 += self.total_energy_1000;
-            temp_surface_composition += self.surface_count[1] * 100. / self.surface_count[2];
+            temp_surface_composition += (self.surface_count[1] * 100) as f64
+                / (self.surface_count[1] + self.surface_count[2]) as f64;
 
             temp_cn_dict_section
                 .iter_mut()
@@ -533,7 +553,7 @@ impl Simulation {
                 // self.surface_count[self.occ[o as usize] as usize] -=
                 //     one_if_12(self.cn_metal[o as usize]);
                 if self.cn_metal[o as usize] == 12 {
-                    self.surface_count[(self.occ[o as usize]) as usize] += 1.;
+                    self.surface_count[(self.occ[o as usize]) as usize] += 1;
                 }
             }
             self.cn_metal[o as usize] -= 1;
@@ -548,7 +568,7 @@ impl Simulation {
                 self.cn_dict[self.cn_metal[o as usize] + 1] += 1;
 
                 if self.cn_metal[o as usize] == 11 {
-                    self.surface_count[(self.occ[o as usize]) as usize] -= 1.;
+                    self.surface_count[(self.occ[o as usize]) as usize] -= 1;
                 }
             }
             self.cn_metal[o as usize] += 1;
