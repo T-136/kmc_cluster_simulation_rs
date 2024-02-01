@@ -694,46 +694,6 @@ impl Simulation {
 
         self.total_energy_1000 += energy1000_diff;
     }
-    fn calc_energy_change_befor_move(
-        &self,
-        move_from: u32,
-        move_to: u32,
-        atom_typ_index: u8,
-    ) -> i64 {
-        match &self.energy {
-            EnergyInput::LinearCn(energy_l_cn) => energy::energy_diff_l_cn(
-                energy_l_cn,
-                self.cn_metal[move_from as usize],
-                self.cn_metal[move_to as usize] - 1_usize,
-                atom_typ_index as usize,
-            ),
-            EnergyInput::Cn(energy_cn) => {
-                let (from_change, to_change) = no_int_nn_from_move(
-                    move_from,
-                    move_to,
-                    &self.gridstructure.nn_pair_no_intersec,
-                );
-
-                energy::energy_diff_cn(
-                    energy_cn,
-                    from_change
-                        .iter()
-                        .filter(|x| self.occ[**x as usize] != 0)
-                        .map(|x| (self.cn_metal[*x as usize], self.occ[*x as usize])),
-                    to_change
-                        .iter()
-                        .filter(|x| self.occ[**x as usize] != 0)
-                        .map(|x| (self.cn_metal[*x as usize], self.occ[*x as usize])),
-                    self.cn_metal[move_from as usize],
-                    self.cn_metal[move_to as usize],
-                    atom_typ_index as usize,
-                )
-            }
-
-            EnergyInput::LinearGcn(_) => todo!(),
-            EnergyInput::Gcn(_) => todo!(),
-        }
-    }
 
     fn calc_energy_change_by_move(&self, move_from: u32, move_to: u32, atom_typ_index: u8) -> i64 {
         match &self.energy {
