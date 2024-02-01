@@ -3,6 +3,7 @@ const M_BETA: i64 = -0330;
 const M_ALPHA: i64 = 3960;
 
 use core::panic;
+use std::sync::atomic;
 
 // Co
 // const M_BETA: i64 = -0219;
@@ -66,22 +67,24 @@ pub fn energy_diff_cn<I, O>(
     mut atom_typ_index: usize,
 ) -> i64
 where
-    I: Iterator<Item = usize>,
-    O: Iterator<Item = usize>,
+    I: Iterator<Item = (usize, u8)>,
+    O: Iterator<Item = (usize, u8)>,
 {
-    atom_typ_index -= 1;
-    let energy = energy[atom_typ_index];
+    // let energy = energy[atom_typ_index];
     let mut energy_diff_1000 = 0;
-    for cn_from in cn_from_list {
-        energy_diff_1000 -= energy[cn_from];
-        energy_diff_1000 += energy[cn_from - 1];
+    for (cn_from, mut atom_typ_index) in cn_from_list {
+        atom_typ_index -= 1;
+        energy_diff_1000 -= energy[atom_typ_index as usize][cn_from];
+        energy_diff_1000 += energy[atom_typ_index as usize][cn_from - 1];
     }
-    for cn_to in cn_to_list {
-        energy_diff_1000 -= energy[cn_to];
-        energy_diff_1000 += energy[cn_to + 1];
+    for (cn_to, mut atom_typ_index) in cn_to_list {
+        atom_typ_index -= 1;
+        energy_diff_1000 -= energy[atom_typ_index as usize][cn_to];
+        energy_diff_1000 += energy[atom_typ_index as usize][cn_to + 1];
     }
-    energy_diff_1000 -= energy[move_from_cn];
-    energy_diff_1000 += energy[move_to_cn - 1];
+    atom_typ_index -= 1;
+    energy_diff_1000 -= energy[atom_typ_index][move_from_cn];
+    energy_diff_1000 += energy[atom_typ_index][move_to_cn - 1];
 
     energy_diff_1000
 }

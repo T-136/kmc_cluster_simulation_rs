@@ -278,7 +278,7 @@ impl Simulation {
                         // >1 so that atoms cant leave the cluster
                         // <x cant move if all neighbors are occupied
                         if self.cn_metal[*u as usize] > 1 {
-                            let energy = self.calc_energy_change_befor_move(i as u32, *u, *o);
+                            let energy = self.calc_energy_change_by_move(i as u32, *u, *o);
                             self.possible_moves
                                 .add_item(i as u32, *u, energy, self.temperature)
                         }
@@ -480,7 +480,7 @@ impl Simulation {
             self.cn_dict_sections.push(section.clone());
 
             self.surface_composition
-                .push(temp_surface_composition as f64 / (section_size / SAVE_TH) as f64 / 1000.);
+                .push(temp_surface_composition as f64 / (section_size / SAVE_TH) as f64);
 
             self.time_per_section.push(self.sim_time);
 
@@ -707,7 +707,29 @@ impl Simulation {
                 self.cn_metal[move_to as usize] - 1_usize,
                 atom_typ_index as usize,
             ),
-            EnergyInput::Cn(_) => todo!(),
+            EnergyInput::Cn(energy_cn) => {
+                let (from_change, to_change) = no_int_nn_from_move(
+                    move_from,
+                    move_to,
+                    &self.gridstructure.nn_pair_no_intersec,
+                );
+
+                energy::energy_diff_cn(
+                    energy_cn,
+                    from_change
+                        .iter()
+                        .filter(|x| self.occ[**x as usize] != 0)
+                        .map(|x| (self.cn_metal[*x as usize], self.occ[*x as usize])),
+                    to_change
+                        .iter()
+                        .filter(|x| self.occ[**x as usize] != 0)
+                        .map(|x| (self.cn_metal[*x as usize], self.occ[*x as usize])),
+                    self.cn_metal[move_from as usize],
+                    self.cn_metal[move_to as usize],
+                    atom_typ_index as usize,
+                )
+            }
+
             EnergyInput::LinearGcn(_) => todo!(),
             EnergyInput::Gcn(_) => todo!(),
         }
@@ -733,11 +755,11 @@ impl Simulation {
                     from_change
                         .iter()
                         .filter(|x| self.occ[**x as usize] != 0)
-                        .map(|x| self.cn_metal[*x as usize]),
+                        .map(|x| (self.cn_metal[*x as usize], self.occ[*x as usize])),
                     to_change
                         .iter()
                         .filter(|x| self.occ[**x as usize] != 0)
-                        .map(|x| self.cn_metal[*x as usize]),
+                        .map(|x| (self.cn_metal[*x as usize], self.occ[*x as usize])),
                     self.cn_metal[move_from as usize],
                     self.cn_metal[move_to as usize],
                     atom_typ_index as usize,

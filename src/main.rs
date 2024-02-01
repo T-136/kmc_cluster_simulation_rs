@@ -59,7 +59,6 @@ fn collect_energy_values<const N: usize>(mut energy_vec: [i64; N], inp: String) 
             let mut line_values: [i64; N] = [0; N];
             println!("{:?}", line);
             for (i, value) in line.unwrap().iter().enumerate() {
-                println!("{}", value);
                 line_values[i] = *value;
             }
             energy_vec.push(line_values);
