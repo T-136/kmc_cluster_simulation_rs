@@ -34,7 +34,7 @@ const NN_PAIR_NO_INTERSEC_NUMBER: usize = 7;
 const NNN_PAIR_NO_INTERSEC_NUMBER: usize = 20;
 const AMOUNT_SECTIONS: usize = 1000;
 
-const GRID_SIZE: [u32; 3] = [20, 20, 20];
+const GRID_SIZE: [u32; 3] = [30, 30, 30];
 
 const SAVE_ENTIRE_SIM: bool = true;
 
@@ -983,20 +983,20 @@ impl Simulation {
 
     fn update_possible_moves(&mut self, move_from: u32, move_to: u32) {
         self.possible_moves.remove_item(move_from, move_to);
-        for neighbor_atom in self.gridstructure.nn[&move_from] {
-            if self.occ[neighbor_atom as usize] == 0 {
-                self.possible_moves.remove_item(move_from, neighbor_atom);
+        for nn_to_from in self.gridstructure.nn[&move_from] {
+            if self.occ[nn_to_from as usize] == 0 {
+                self.possible_moves.remove_item(move_from, nn_to_from);
             }
-            if self.occ[neighbor_atom as usize] != 0 {
+            if self.occ[nn_to_from as usize] != 0 {
                 // greater than one because of neighbor moving in this spot
                 if self.cn_metal[move_from as usize] > 1 {
                     let energy_change = self.calc_energy_change_by_move(
-                        neighbor_atom,
+                        nn_to_from,
                         move_from,
-                        self.occ[neighbor_atom as usize],
+                        self.occ[nn_to_from as usize],
                     );
                     self.possible_moves.add_item(
-                        neighbor_atom,
+                        nn_to_from,
                         move_from,
                         energy_change,
                         self.temperature,
@@ -1005,21 +1005,21 @@ impl Simulation {
             }
         }
 
-        for empty_neighbor in self.gridstructure.nn[&move_to] {
-            if self.occ[empty_neighbor as usize] != 0 {
-                self.possible_moves.remove_item(empty_neighbor, move_to);
+        for nn_to_to in self.gridstructure.nn[&move_to] {
+            if self.occ[nn_to_to as usize] != 0 {
+                self.possible_moves.remove_item(nn_to_to, move_to);
             }
-            if self.occ[empty_neighbor as usize] == 0 {
+            if self.occ[nn_to_to as usize] == 0 {
                 // greater than one because of neighbor moving in this spot
-                if self.cn_metal[empty_neighbor as usize] > 1 {
+                if self.cn_metal[nn_to_to as usize] > 1 {
                     let energy_change = self.calc_energy_change_by_move(
                         move_to,
-                        empty_neighbor,
+                        nn_to_to,
                         self.occ[move_to as usize],
                     );
                     self.possible_moves.add_item(
                         move_to,
-                        empty_neighbor,
+                        nn_to_to,
                         energy_change,
                         self.temperature,
                     );
