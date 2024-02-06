@@ -57,7 +57,8 @@ pub fn create_input_cluster(
     nn: &HashMap<u32, [u32; 12], FnvBuildHasher>,
     nsites: u32,
     support_indices: Option<Vec<u32>>,
-    coating: bool,
+    coating: Option<String>,
+    atom_names: &HashMap<String, u8>,
 ) -> (Vec<u8>, HashSet<u32, FnvBuildHasher>, Option<Vec<u32>>) {
     let center_of_mass: [f64; 3] = {
         let mut d: [Vec<f64>; 3] = [Vec::new(), Vec::new(), Vec::new()];
@@ -145,16 +146,16 @@ pub fn create_input_cluster(
         }
     }
     for site in onlyocc.iter() {
-        occ[*site as usize] = 1_u8;
+        occ[*site as usize] = atom_names[&"Pt".to_string()];
     }
-    if coating {
+    if let Some(coat_atom) = coating {
         let mut all_neigbors = Vec::new();
         for atom in onlyocc.iter() {
             all_neigbors.extend_from_slice(&nn[atom]);
         }
         for neighbor in all_neigbors {
             if occ[neighbor as usize] == 0 {
-                occ[neighbor as usize] = 2;
+                occ[neighbor as usize] = atom_names[&coat_atom];
                 onlyocc.insert(neighbor);
             }
         }
@@ -164,34 +165,40 @@ pub fn create_input_cluster(
 }
 
 pub fn occ_onlyocc_from_xyz(
-    xyz: &Vec<[f64; 3]>,
+    xyz: &Vec<(String, [f64; 3])>,
     nsites: u32,
-    xsites_positions: &Vec<[f64; 3]>,
+    xsites_positions: &[[f64; 3]],
+    atom_names: &HashMap<String, u8>,
+    coating: Option<String>,
+    nn: &HashMap<u32, [u32; 12], FnvBuildHasher>,
 ) -> (Vec<u8>, HashSet<u32, FnvBuildHasher>) {
-    let mut occ: Vec<u8> = Vec::with_capacity(nsites as usize);
-    for _ in 0..nsites {
-        occ.push(0 as u8);
-    }
+    let mut occ: Vec<u8> = vec![0; nsites as usize];
     let mut onlyocc: HashSet<u32, FnvBuildHasher> =
         fnv::FnvHashSet::with_capacity_and_hasher(xyz.len(), Default::default());
 
     for x in xyz.iter() {
         for site in 0..nsites {
-            let dist = (x[0] - xsites_positions[site as usize][0]).powf(2.)
-                + (x[1] - xsites_positions[site as usize][1]).powf(2.)
-                + (x[2] - xsites_positions[site as usize][2]).powf(2.);
+            let dist = (x.1[0] - xsites_positions[site as usize][0]).powf(2.)
+                + (x.1[1] - xsites_positions[site as usize][1]).powf(2.)
+                + (x.1[2] - xsites_positions[site as usize][2]).powf(2.);
             if dist < 0.15 {
-                occ[site as usize] = 1;
+                println!("atom number {}", atom_names[&x.0]);
+                occ[site as usize] = atom_names[&x.0];
                 onlyocc.insert(site);
             }
         }
     }
-    // for (i, o) in occ.iter().enumerate() {
-    //     if *o == 1_u8 {
-    //         if !onlyocc.contains(&(i as u32)) {
-    //             println!("occ: {}", i);
-    //         }
-    //     }
-    // }
+    if let Some(coat_atom) = coating {
+        let mut all_neigbors = Vec::new();
+        for atom in onlyocc.iter() {
+            all_neigbors.extend_from_slice(&nn[atom]);
+        }
+        for neighbor in all_neigbors {
+            if occ[neighbor as usize] == 0 {
+                occ[neighbor as usize] = atom_names[&coat_atom];
+                onlyocc.insert(neighbor);
+            }
+        }
+    }
     (occ, onlyocc)
 }

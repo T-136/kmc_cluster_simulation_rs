@@ -1,3 +1,4 @@
+// use ahash::HashMap;
 use clap::ArgGroup;
 use clap::Parser;
 use core::panic;
@@ -6,11 +7,20 @@ use csv::ReaderBuilder;
 use mc::energy::EnergyInput;
 use mc::GridStructure;
 use mc::Simulation;
+use std::collections::HashMap;
 use std::fs;
+use std::io::BufReader;
 use std::path::Path;
 use std::sync::Arc;
 use std::thread;
 use std::usize;
+
+use std::convert::TryInto;
+
+fn vec_to_array<T, const N: usize>(v: Vec<T>) -> [T; N] {
+    v.try_into()
+        .unwrap_or_else(|v: Vec<T>| panic!("Expected a Vec of length {} but it was {}", N, v.len()))
+}
 
 fn fmt_scient(num: &str) -> u64 {
     let mut parts = num.split(['e', 'E']);
@@ -26,7 +36,10 @@ fn fmt_scient(num: &str) -> u64 {
         * base.pow(exp.parse::<u32>().expect("wrong iterations input"))
 }
 
-fn collect_energy_values<const N: usize>(mut energy_vec: [i64; N], inp: String) -> Vec<[i64; N]> {
+fn collect_energy_values<const N: usize>(
+    mut energy_vec: [i64; N],
+    inp: String,
+) -> (Vec<[i64; N]>, HashMap<String, u8>) {
     if inp.chars().next().unwrap().is_numeric() || inp.starts_with('-') {
         let mut string_iter = inp.trim().split(',');
         for x in energy_vec.iter_mut() {
@@ -42,28 +55,31 @@ fn collect_energy_values<const N: usize>(mut energy_vec: [i64; N], inp: String) 
                     )
                 });
         }
-        vec![energy_vec]
+        let mut map: HashMap<String, u8> = HashMap::new();
+        map.insert("Pt".to_string(), 1_u8);
+        (vec![energy_vec], map)
     } else {
-        let s = fs::read_to_string(inp.clone()).expect("can't find energy file");
-        println!("{}", s);
-        let mut rdr = ReaderBuilder::new()
-            .delimiter(b',')
-            .has_headers(false)
-            .from_path(Path::new(&inp));
+        // let s = fs::read_to_string(inp.clone()).expect("can't find energy file");
+        let file = fs::File::open(inp).expect("can't find energy file");
+        let reader = BufReader::new(file);
+        // let res: Result<Results, serde_json::Error> = serde_json::from_reader(reader);
+        let res: Result<HashMap<String, Vec<i64>, fnv::FnvBuildHasher>, serde_json::Error> =
+            serde_json::from_reader(reader);
+        println!("{:?}", res);
+
         let mut energy_vec = Vec::new();
 
+        let mut atom_names: HashMap<String, u8> = HashMap::new();
         // println!("{:?}", record);
 
-        for line in rdr.unwrap().into_deserialize::<Vec<i64>>() {
-            // println!("{}", line.unwrap().clone());
-            let mut line_values: [i64; N] = [0; N];
-            println!("{:?}", line);
-            for (i, value) in line.unwrap().iter().enumerate() {
-                line_values[i] = *value;
-            }
-            energy_vec.push(line_values);
+        for (i, (atom_name, energy_line)) in res.unwrap().into_iter().enumerate() {
+            println!("{:?}", energy_line);
+
+            atom_names.insert(atom_name, i as u8 + 1);
+            energy_vec.push(vec_to_array(energy_line));
         }
-        energy_vec
+
+        (energy_vec, atom_names)
     }
 }
 
@@ -131,8 +147,8 @@ struct Args {
     #[arg(long, default_value_t = false)]
     heat_map: bool,
 
-    #[arg(long, default_value_t = false)]
-    coating: bool,
+    #[arg(long)]
+    coating: Option<String>,
 
     #[arg(short, long, value_delimiter = '/', default_values_t = vec!(1,2))]
     optimization_cut_off_fraction: Vec<u64>,
@@ -143,13 +159,13 @@ struct Args {
 
 fn file_paths(grid_folder: String) -> (String, String, String, String, String, String, String) {
     (
-        format!("{}/nearest_neighbor", grid_folder),
-        format!("{}/next_nearest_neighbor", grid_folder),
-        format!("{}/nn_pairlist", grid_folder),
-        format!("{}/nnn_pairlist", grid_folder),
-        format!("{}/atom_sites", grid_folder),
-        format!("{}/nn_pair_no_intersec", grid_folder),
-        format!("{}/nnn_gcn_no_intersec.json", grid_folder),
+        format!("{}nearest_neighbor", grid_folder),
+        format!("{}next_nearest_neighbor", grid_folder),
+        format!("{}nn_pairlist", grid_folder),
+        format!("{}nnn_pairlist", grid_folder),
+        format!("{}atom_sites", grid_folder),
+        format!("{}nn_pair_no_intersec", grid_folder),
+        format!("{}nnn_gcn_no_intersec.json", grid_folder),
     )
 }
 
@@ -196,7 +212,7 @@ fn main() {
         nnn_pair_no_int_file,
     ) = file_paths(args.grid_folder);
 
-    let coating: bool = args.coating;
+    let coating: Option<String> = args.coating;
     let niter_str = args.iterations;
     let niter = fmt_scient(&niter_str);
     let mut write_snap_shots: bool = args.write_snap_shots;
@@ -208,14 +224,18 @@ fn main() {
     let optimization_cut_off_fraction: Vec<u64> = args.optimization_cut_off_fraction;
     let repetition = args.repetition;
 
-    let energy = if args.e_l_cn.is_some() {
-        EnergyInput::LinearCn(collect_energy_values([0; 2], args.e_l_cn.unwrap()))
+    let (energy, atom_names) = if args.e_l_cn.is_some() {
+        let (energy, atom_names) = collect_energy_values([0; 2], args.e_l_cn.unwrap());
+        (EnergyInput::LinearCn(energy), atom_names)
     } else if args.e_cn.is_some() {
-        EnergyInput::Cn(collect_energy_values([0; 13], args.e_cn.unwrap()))
+        let (energy, atom_names) = collect_energy_values([0; 13], args.e_cn.unwrap());
+        (EnergyInput::Cn(energy), atom_names)
     } else if args.e_l_gcn.is_some() {
-        EnergyInput::LinearGcn(collect_energy_values([0; 2], args.e_l_gcn.unwrap()))
+        let (energy, atom_names) = collect_energy_values([0; 2], args.e_l_gcn.unwrap());
+        (EnergyInput::LinearGcn(energy), atom_names)
     } else if args.e_gcn.is_some() {
-        EnergyInput::Gcn(collect_energy_values([0; 145], args.e_gcn.unwrap()))
+        let (energy, atom_names) = collect_energy_values([0; 145], args.e_gcn.unwrap());
+        (EnergyInput::Gcn(energy), atom_names)
     } else {
         panic!("no energy")
     };
@@ -241,9 +261,12 @@ fn main() {
         let energy = energy.clone();
         let gridstructure_arc = Arc::clone(&gridstructure);
         let support_indices = support_indices.clone();
+        let atom_names = atom_names.clone();
+        let coating = coating.clone();
 
         handle_vec.push(thread::spawn(move || {
             let mut sim = Simulation::new(
+                atom_names,
                 niter,
                 input_file,
                 atoms_input,

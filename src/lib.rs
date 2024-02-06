@@ -40,6 +40,7 @@ const SAVE_ENTIRE_SIM: bool = true;
 
 #[derive(Clone)]
 pub struct Simulation {
+    atom_names: HashMap<String, u8>,
     niter: u64,
     composition: f64,
     number_all_atoms: u32,
@@ -69,6 +70,7 @@ pub struct Simulation {
 
 impl Simulation {
     pub fn new(
+        atom_names: HashMap<String, u8>,
         niter: u64,
         input_file: Option<String>,
         atoms_input: Option<u32>,
@@ -81,14 +83,21 @@ impl Simulation {
         energy: EnergyInput,
         support_indices: Option<Vec<u32>>,
         gridstructure: Arc<GridStructure>,
-        coating: bool,
+        coating: Option<String>,
     ) -> Simulation {
         let nsites: u32 = GRID_SIZE[0] * GRID_SIZE[1] * GRID_SIZE[2] * 4;
         let mut cn_dict: [u32; CN + 1] = [0; CN + 1];
         let (occ, onlyocc, number_all_atoms) = if input_file.is_some() {
             let xyz = read_and_write::read_sample(&input_file.unwrap());
-            let (occ, onlyocc) =
-                setup::occ_onlyocc_from_xyz(&xyz, nsites, &gridstructure.xsites_positions);
+            print!("{:?}", atom_names);
+            let (occ, onlyocc) = setup::occ_onlyocc_from_xyz(
+                &xyz,
+                nsites,
+                &gridstructure.xsites_positions,
+                &atom_names,
+                coating,
+                &gridstructure.nn,
+            );
             let number_of_atoms: u32 = onlyocc.len() as u32;
             (occ, onlyocc, number_of_atoms)
         } else if atoms_input.is_some() {
@@ -99,6 +108,7 @@ impl Simulation {
                 nsites,
                 support_indices,
                 coating,
+                &atom_names,
             );
             let number_of_atom: u32 = onlyocc.len() as u32;
             (occ, onlyocc, number_of_atom)
@@ -217,6 +227,7 @@ impl Simulation {
         time_per_section.push(0.);
 
         Simulation {
+            atom_names,
             niter,
             number_all_atoms,
             composition,
@@ -366,6 +377,7 @@ impl Simulation {
             &self.gridstructure.xsites_positions,
             &self.gridstructure.unit_cell,
             &self.occ,
+            &self.atom_names,
         );
 
         if self.heat_map.is_some() {

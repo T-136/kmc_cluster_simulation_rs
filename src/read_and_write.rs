@@ -8,6 +8,16 @@ use std::io::{self, BufRead};
 use time_graph::instrument;
 use vasp_poscar::Poscar;
 
+fn find_key_for_value<'a>(map: &'a HashMap<String, u8>, value: &u8) -> Option<&'a str> {
+    map.iter().find_map(|(key, val)| {
+        if val == value {
+            Some(key.as_str())
+        } else {
+            None
+        }
+    })
+}
+
 pub fn write_occ_as_xyz(
     // trajectory: &mut Trajectory,
     save_folder: String,
@@ -15,6 +25,7 @@ pub fn write_occ_as_xyz(
     xsites_positions: &Vec<[f64; 3]>,
     unit_cell: &[f64; 3],
     occ: &Vec<u8>,
+    atom_names: &HashMap<String, u8>,
 ) {
     let mut trajectory = Trajectory::open(save_folder.clone() + "/lowest_energy.xyz", 'w').unwrap();
     let mut xyz: Vec<[f64; 3]> = Vec::new();
@@ -24,16 +35,18 @@ pub fn write_occ_as_xyz(
     let mut frame = Frame::new();
     frame.set_cell(&UnitCell::new(unit_cell.clone()));
 
-    // for atom in xyz.into_iter() {
-    //     frame.add_atom(&Atom::new("Pt"), [atom[0], atom[1], atom[2]], None);
-    // }
     for (i, atom) in occ.iter().enumerate() {
-        if atom == &1 {
-            frame.add_atom(&Atom::new("Pt"), xsites_positions[i], None);
+        if atom == &0 {
+            continue;
         }
-        if atom == &2 {
-            frame.add_atom(&Atom::new("Pd"), xsites_positions[i], None);
-        }
+        frame.add_atom(
+            &Atom::new(
+                find_key_for_value(atom_names, atom)
+                    .expect(format!("unknown atom number {:?}, {:?}", atom_names, atom).as_str()),
+            ),
+            xsites_positions[i],
+            None,
+        );
     }
 
     trajectory
@@ -42,19 +55,23 @@ pub fn write_occ_as_xyz(
 }
 
 #[instrument]
-pub fn read_sample(input_file: &str) -> Vec<[f64; 3]> {
-    if input_file.contains(".poscar") {
-        let newatoms = Poscar::from_path(input_file).unwrap();
-        let xyz = newatoms.scaled_cart_positions();
-        xyz.into_owned()
-    } else if input_file.contains(".xyz") {
-        let mut trajectory = Trajectory::open(input_file, 'r').unwrap();
-        let mut frame = Frame::new();
-        trajectory.read(&mut frame).unwrap();
-        frame.positions().to_owned()
-    } else {
-        panic!("no .poscar or .xyz, cant read file");
+pub fn read_sample(input_file: &str) -> Vec<(String, [f64; 3])> {
+    // if input_file.contains(".poscar") {
+    //     let newatoms = Poscar::from_path(input_file).unwrap();
+    //     let xyz = newatoms.scaled_cart_positions();
+    //     xyz.into_owned()
+    // } else if input_file.contains(".xyz") {
+    let mut trajectory = Trajectory::open(input_file, 'r').unwrap();
+    let mut frame = Frame::new();
+    trajectory.read(&mut frame).unwrap();
+    let mut atom_vec: Vec<(String, [f64; 3])> = Vec::new();
+    for (i, atom) in frame.iter_atoms().enumerate() {
+        atom_vec.push((atom.name(), frame.positions()[i]));
     }
+    atom_vec
+    // } else {
+    // panic!("no .poscar or .xyz, cant read file");
+    // }
 }
 
 fn fmt_scient(num: &str) -> f64 {
