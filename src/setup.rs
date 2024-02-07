@@ -182,7 +182,6 @@ pub fn occ_onlyocc_from_xyz(
                 + (x.1[1] - xsites_positions[site as usize][1]).powf(2.)
                 + (x.1[2] - xsites_positions[site as usize][2]).powf(2.);
             if dist < 0.15 {
-                println!("atom number {}", atom_names[&x.0]);
                 occ[site as usize] = atom_names[&x.0];
                 onlyocc.insert(site);
             }

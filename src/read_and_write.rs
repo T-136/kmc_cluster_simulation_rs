@@ -6,7 +6,6 @@ use std::collections::HashSet;
 use std::fs;
 use std::io::{self, BufRead};
 use time_graph::instrument;
-use vasp_poscar::Poscar;
 
 fn find_key_for_value<'a>(map: &'a HashMap<String, u8>, value: &u8) -> Option<&'a str> {
     map.iter().find_map(|(key, val)| {

@@ -331,7 +331,7 @@ impl Simulation {
                 }
             };
             self.cond_snap_and_heat_map(&iiter);
-            if iiter % 100000 == 0 {
+            if iiter % 10000 == 0 {
                 self.possible_moves.calc_total_k_change(self.temperature)
             }
 
