@@ -157,7 +157,18 @@ struct Args {
     unique_levels: i32,
 }
 
-fn file_paths(grid_folder: String) -> (String, String, String, String, String, String, String) {
+fn file_paths(
+    grid_folder: String,
+) -> (
+    String,
+    String,
+    String,
+    String,
+    String,
+    String,
+    String,
+    String,
+) {
     (
         format!("{}nearest_neighbor", grid_folder),
         format!("{}next_nearest_neighbor", grid_folder),
@@ -166,6 +177,7 @@ fn file_paths(grid_folder: String) -> (String, String, String, String, String, S
         format!("{}atom_sites", grid_folder),
         format!("{}nn_pair_no_intersec", grid_folder),
         format!("{}nnn_gcn_no_intersec.json", grid_folder),
+        format!("{}surrounding_moves.json", grid_folder),
     )
 }
 
@@ -178,9 +190,10 @@ fn unpack_atoms_input(atoms: Vec<u32>) -> (Option<u32>, Option<Vec<u32>>) {
         panic!("wrong atoms input, user one of the two input options: \n number of atoms: '-a x' \n or number of atoms with miller indices: '-a x h k l' ")
     }
 }
-
+use std::env;
 fn main() {
     // enable_data_collection(true);
+    env::set_var("RUST_BACKTRACE", "1");
     println!("determined next-nearest neighbor list");
 
     let args = Args::parse();
@@ -210,6 +223,7 @@ fn main() {
         atom_sites,
         nn_pair_no_int_file,
         nnn_pair_no_int_file,
+        surrounding_moves_file,
     ) = file_paths(args.grid_folder);
 
     let coating: Option<String> = args.coating;
@@ -251,6 +265,7 @@ fn main() {
         nnn_pair_no_int_file,
         atom_sites,
         bulk_file_name,
+        surrounding_moves_file,
     );
     let gridstructure = Arc::new(gridstructure);
 

@@ -34,7 +34,7 @@ const NN_PAIR_NO_INTERSEC_NUMBER: usize = 7;
 const NNN_PAIR_NO_INTERSEC_NUMBER: usize = 20;
 const AMOUNT_SECTIONS: usize = 1000;
 
-const GRID_SIZE: [u32; 3] = [30, 30, 30];
+const GRID_SIZE: [u32; 3] = [9, 9, 9];
 
 const SAVE_ENTIRE_SIM: bool = true;
 
@@ -708,6 +708,7 @@ impl Simulation {
     }
 
     fn calc_energy_change_by_move(&self, move_from: u32, move_to: u32, atom_typ_index: u8) -> i64 {
+        // println!("{}", atom_typ_index);
         match &self.energy {
             EnergyInput::LinearCn(energy_l_cn) => energy::energy_diff_l_cn(
                 energy_l_cn,
@@ -913,83 +914,35 @@ impl Simulation {
             EnergyInput::LinearCn(_) | EnergyInput::Cn(_) => {
                 // let i_slice = &self.gridstructure.nn_pair_no_intersec
                 //     [&(move_from as u64 + ((move_to as u64) << 32))];
-                for pos in
-                    self.gridstructure.nn_pair_no_intersec[&(std::cmp::min(move_from, move_to)
-                        as u64
-                        + ((std::cmp::max(move_to, move_from) as u64) << 32))]
-                        .iter()
-                        .flatten()
+                for pos in self.gridstructure.surrounding_moves[&(std::cmp::min(move_from, move_to)
+                    as u64
+                    + ((std::cmp::max(move_to, move_from) as u64) << 32))]
+                    .iter()
                 {
-                    // for neigbor in self.gridstructure.nn[pos] {
-                    // self.update_k(*pos, &self.gridstructure.nn[pos]);
-                    for neigbor in &self.gridstructure.nn[pos] {
-                        // if (self.occ[*pos as usize] != 0 && pos != &move_to && pos != &move_from)
-                        if (self.occ[*pos as usize] != 0)
-                            && (
-                                self.occ[*neigbor as usize] == 0
-                                // && neigbor != &move_to
-                                // && neigbor != &move_from)
-                            )
-                        {
-                            let new_energy = self.calc_energy_change_by_move(
-                                *pos,
-                                *neigbor,
-                                self.occ[*pos as usize],
-                            );
-                            self.possible_moves.update_k_if_move_exists(
-                                *pos,
-                                *neigbor,
-                                new_energy,
-                                self.temperature,
-                            );
-                        }
-                        // if (self.occ[*pos as usize] == 0 && pos != &move_to && pos != &move_from)
-                        if (self.occ[*pos as usize] == 0)
-                            && (
-                                self.occ[*neigbor as usize] != 0
-                                // && neigbor != &move_to
-                                // && neigbor != &move_from)
-                            )
-                        {
-                            let new_energy = self.calc_energy_change_by_move(
-                                *neigbor,
-                                *pos,
-                                self.occ[*neigbor as usize],
-                            );
-                            self.possible_moves.update_k_if_move_exists(
-                                *neigbor,
-                                *pos,
-                                new_energy,
-                                self.temperature,
-                            );
-                        }
+                    if self.occ[pos.0 as usize] != 0 && self.occ[pos.1 as usize] == 0 {
+                        let new_energy =
+                            self.calc_energy_change_by_move(pos.0, pos.1, self.occ[pos.0 as usize]);
+                        self.possible_moves.update_k_if_move_exists(
+                            pos.0,
+                            pos.1,
+                            new_energy,
+                            self.temperature,
+                        );
                     }
-                    // self.update_k(&self.gridstructure.nn[pos], *pos);
-                    // }
+                    if self.occ[pos.1 as usize] != 0 && self.occ[pos.0 as usize] == 0 {
+                        let new_energy =
+                            self.calc_energy_change_by_move(pos.1, pos.0, self.occ[pos.1 as usize]);
+                        self.possible_moves.update_k_if_move_exists(
+                            pos.1,
+                            pos.0,
+                            new_energy,
+                            self.temperature,
+                        );
+                    }
                 }
             }
             EnergyInput::LinearGcn(_) => todo!(),
             EnergyInput::Gcn(_) => todo!(),
-        }
-    }
-
-    fn update_k(&mut self, pos: u32, neighbors: &[u32]) {
-        for neigbor in neighbors {
-            let new_energy = self.calc_energy_change_by_move(pos, *neigbor, self.occ[pos as usize]);
-            self.possible_moves.update_k_if_move_exists(
-                pos,
-                *neigbor,
-                new_energy,
-                self.temperature,
-            );
-            let new_energy =
-                self.calc_energy_change_by_move(*neigbor, pos, self.occ[*neigbor as usize]);
-            self.possible_moves.update_k_if_move_exists(
-                *neigbor,
-                pos,
-                new_energy,
-                self.temperature,
-            );
         }
     }
 

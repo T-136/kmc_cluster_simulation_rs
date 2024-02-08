@@ -18,6 +18,7 @@ pub struct GridStructure {
     >,
     pub xsites_positions: Vec<[f64; 3]>,
     pub unit_cell: [f64; 3],
+    pub surrounding_moves: HashMap<u64, Vec<(u32, u32)>, fnv::FnvBuildHasher>,
 }
 
 impl GridStructure {
@@ -28,12 +29,14 @@ impl GridStructure {
         nnn_pair_no_int_file: String,
         atom_sites: String,
         bulk_file_name: String,
+        surrounding_moves_file: String,
     ) -> GridStructure {
         let nsites: u32 = super::GRID_SIZE[0] * super::GRID_SIZE[1] * super::GRID_SIZE[2] * 4;
         let nn = read_and_write::read_nn(&pairlist_file);
         let nnn = read_and_write::read_nnn(&n_pairlist_file);
         let nn_pair_no_intersec = read_and_write::read_nn_pair_no_intersec(&nn_pair_no_int_file);
         let nnn_pair_no_intersec = read_and_write::read_nnn_pair_no_intersec(&nnn_pair_no_int_file);
+        let surrounding_moves = read_and_write::read_surounding_moves(&surrounding_moves_file);
 
         let bulk = Poscar::from_path(bulk_file_name).unwrap_or_else(|err| {
             panic!(
@@ -56,6 +59,7 @@ impl GridStructure {
             nnn,
             nn_pair_no_intersec,
             nnn_pair_no_intersec,
+            surrounding_moves,
             xsites_positions,
             unit_cell,
         }

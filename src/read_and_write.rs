@@ -142,6 +142,33 @@ pub fn read_nnn(pairlist_file: &str) -> HashMap<u32, [u32; super::GCN], FnvBuild
     nnn
 }
 
+pub fn read_surounding_moves(
+    surroundin_moves_file: &str,
+) -> HashMap<u64, Vec<(u32, u32)>, fnv::FnvBuildHasher> {
+    let nnn_pairlist =
+        fs::File::open(surroundin_moves_file).expect("Should have been able to read the file");
+
+    let reader = io::BufReader::new(nnn_pairlist);
+
+    let surrounding_moves_no_bit_shifting: HashMap<
+        u32,
+        HashMap<u32, Vec<(u32, u32)>, fnv::FnvBuildHasher>,
+    > = serde_json::from_reader(reader).unwrap();
+
+    let mut surrounding_moves: HashMap<u64, Vec<(u32, u32)>, fnv::FnvBuildHasher> =
+        FnvHashMap::with_capacity_and_hasher(5400, Default::default());
+    for (k1, d1) in surrounding_moves_no_bit_shifting.into_iter() {
+        for (k2, d2) in d1.into_iter() {
+            surrounding_moves.insert((k1 as u64 + ((k2 as u64) << 32)), d2);
+        }
+    }
+
+    // let nnn_pair: HashMap<u64, [HashMap<u32, Vec<u32>, FnvBuildHasher>; 2], FnvBuildHasher> =
+    //     serde_json::from_reader(reader).unwrap();
+
+    surrounding_moves
+}
+
 pub fn read_nnn_pair_no_intersec(
     nnn_pairlist_file: &str,
 ) -> HashMap<
