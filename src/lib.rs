@@ -707,6 +707,15 @@ impl Simulation {
         self.total_energy_1000 += energy1000_diff;
     }
 
+    fn filter_map_energy_diff_cn(self, x: &u32) -> Option<(usize, u8)> {
+        let atom_typ_index = self.occ[*x as usize];
+        if atom_typ_index != 0 {
+            Some((self.cn_metal[*x as usize], self.occ[*x as usize]))
+        } else {
+            None
+        }
+    }
+
     fn calc_energy_change_by_move(&self, move_from: u32, move_to: u32, atom_typ_index: u8) -> i64 {
         // println!("{}", atom_typ_index);
         match &self.energy {
@@ -725,14 +734,26 @@ impl Simulation {
 
                 energy::energy_diff_cn(
                     energy_cn,
-                    from_change
-                        .iter()
-                        .filter(|x| self.occ[**x as usize] != 0)
-                        .map(|x| (self.cn_metal[*x as usize], self.occ[*x as usize])),
-                    to_change
-                        .iter()
-                        .filter(|x| self.occ[**x as usize] != 0)
-                        .map(|x| (self.cn_metal[*x as usize], self.occ[*x as usize])),
+                    from_change.iter().filter_map(|x| {
+                        let atom_typ_index = self.occ[*x as usize];
+                        if atom_typ_index != 0 {
+                            Some((self.cn_metal[*x as usize], atom_typ_index))
+                        } else {
+                            None
+                        }
+                    }),
+                    // .filter(|x| self.occ[**x as usize] != 0)
+                    // .map(|x| (self.cn_metal[*x as usize], self.occ[*x as usize])),
+                    to_change.iter().filter_map(|x| {
+                        let atom_typ_index = self.occ[*x as usize];
+                        if atom_typ_index != 0 {
+                            Some((self.cn_metal[*x as usize], atom_typ_index))
+                        } else {
+                            None
+                        }
+                    }),
+                    // .filter(|x| self.occ[**x as usize] != 0)
+                    // .map(|x| (self.cn_metal[*x as usize], self.occ[*x as usize])),
                     self.cn_metal[move_from as usize],
                     self.cn_metal[move_to as usize],
                     atom_typ_index as usize,
