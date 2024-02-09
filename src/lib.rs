@@ -742,8 +742,6 @@ impl Simulation {
                             None
                         }
                     }),
-                    // .filter(|x| self.occ[**x as usize] != 0)
-                    // .map(|x| (self.cn_metal[*x as usize], self.occ[*x as usize])),
                     to_change.iter().filter_map(|x| {
                         let atom_typ_index = self.occ[*x as usize];
                         if atom_typ_index != 0 {
@@ -752,8 +750,6 @@ impl Simulation {
                             None
                         }
                     }),
-                    // .filter(|x| self.occ[**x as usize] != 0)
-                    // .map(|x| (self.cn_metal[*x as usize], self.occ[*x as usize])),
                     self.cn_metal[move_from as usize],
                     self.cn_metal[move_to as usize],
                     atom_typ_index as usize,
