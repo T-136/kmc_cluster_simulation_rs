@@ -120,6 +120,7 @@ pub fn read_nn(pairlist_file: &str) -> HashMap<u32, [u32; super::CN], FnvBuildHa
     }
     nn
 }
+
 pub fn read_nnn(pairlist_file: &str) -> HashMap<u32, [u32; super::GCN], FnvBuildHasher> {
     println!("reading pairlists from: {}", pairlist_file);
 

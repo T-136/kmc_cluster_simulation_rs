@@ -193,14 +193,33 @@ fn tst_rate_calculation(energy_1000: i64, temperature: f64) -> f64 {
         * (-(e_use + e_barrier_1000) as f64 / (KB_eV * temperature * 1000.)).exp()
 }
 
-// #[cfg(test)]
-// mod tests {
-//     use super::*;
+// pub unsafe fn update_k_if_move_exists_par(
+//     ptr: *mut ListDict,
+//     move_from: u32,
+//     move_to: u32,
+//     new_energy: i64,
+//     temperature: f64,
+// ) -> Option<f64> {
+//     if let Some(position) = (*ptr)
+//         .move_to_position
+//         .get(&(move_from as u64 + ((move_to as u64) << 32)))
+//     {
+//         // let old_energy = std::mem::replace(&mut self.moves[*position].energy, new_energy);
 //
-//     #[test]
-//     fn test_arrhenius_eq() {
-//         let k = arrhenius_equation(-360, 300.);
-//         println!("{}", k);
-//         assert_eq!(k, -100.);
+//         let new_k = tst_rate_calculation(new_energy, temperature);
+//         // println!("new_k: {} e: {}", new_k, new_energy);
+//         let total_k_change = new_k - (*ptr).moves[*position].k;
+//         // (*ptr).total_k += new_k;
+//         // (*ptr).total_k -= (*ptr).moves[*position].k;
+//         (*ptr).moves[*position].k = new_k;
+//         (*ptr).moves[*position].energy = new_energy;
+//         Some(total_k_change)
+//     } else {
+//         None
 //     }
 // }
+// pub struct WrapperListDict(pub *mut ListDict);
+// unsafe impl Send for ListDict {}
+// unsafe impl Sync for ListDict {}
+// unsafe impl Send for WrapperListDict {}
+// unsafe impl Sync for WrapperListDict {}
