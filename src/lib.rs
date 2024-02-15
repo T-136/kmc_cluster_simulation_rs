@@ -34,7 +34,7 @@ const NN_PAIR_NO_INTERSEC_NUMBER: usize = 7;
 const NNN_PAIR_NO_INTERSEC_NUMBER: usize = 20;
 const AMOUNT_SECTIONS: usize = 1000;
 
-const GRID_SIZE: [u32; 3] = [9, 9, 9];
+const GRID_SIZE: [u32; 3] = [20, 20, 20];
 
 const SAVE_ENTIRE_SIM: bool = true;
 
@@ -1159,6 +1159,7 @@ pub fn find_simulation_with_lowest_energy(folder: String) -> anyhow::Result<()> 
 //                 format!("{}/atom_sites", grid_folder),
 //                 format!("{}/nn_pair_no_intersec", grid_folder),
 //                 format!("{}/nnn_gcn_no_intersec.json", grid_folder),
+//                 format!("{}surrounding_moves.json", grid_folder),
 //             )
 //         }
 //         let (
@@ -1169,6 +1170,7 @@ pub fn find_simulation_with_lowest_energy(folder: String) -> anyhow::Result<()> 
 //             atom_sites,
 //             nn_pair_no_int_file,
 //             nnn_pair_no_int_file,
+//             surrounding_moves_file,
 //         ) = file_paths("../999-pair_inline".to_string());
 //
 //         let energy = EnergyInput::Gcn([
@@ -1191,6 +1193,7 @@ pub fn find_simulation_with_lowest_energy(folder: String) -> anyhow::Result<()> 
 //             nnn_pair_no_int_file,
 //             atom_sites,
 //             String::from("../input_cluster/bulk.poscar"),
+//             surrounding_moves_file,
 //         );
 //
 //         let mut sim = Simulation::new(

@@ -260,7 +260,7 @@ fn main() {
     let mut handle_vec = Vec::new();
     let gridstructure = GridStructure::new(
         pairlist_file,
-        n_pairlist_file,
+        // n_pairlist_file,
         nn_pair_no_int_file,
         nnn_pair_no_int_file,
         atom_sites,

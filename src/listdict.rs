@@ -7,7 +7,7 @@ use std::collections::HashMap;
 pub struct ListDict {
     move_to_position: HashMap<u64, usize, ahash::RandomState>,
     pub moves: Vec<Move>, // [(from, to, energy_change)]
-    total_k: f64,
+    pub total_k: f64,
 }
 
 #[derive(Clone, Debug)]
