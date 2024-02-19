@@ -218,7 +218,7 @@ impl Simulation {
                 atom_1 += 1;
             }
             if o == &2 {
-                atom_2 += 2;
+                atom_2 += 1;
             }
         }
         let composition = atom_1 as f64 / (atom_1 + atom_2) as f64;
@@ -332,7 +332,7 @@ impl Simulation {
             };
             self.cond_snap_and_heat_map(&iiter);
             if iiter % 10000 == 0 {
-                self.possible_moves.calc_total_k_change(self.temperature)
+                self.possible_moves.calc_total_k_change(self.temperature);
             }
 
             let (move_from, move_to, energy1000_diff, k_tot) = self
