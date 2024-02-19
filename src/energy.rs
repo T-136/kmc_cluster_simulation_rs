@@ -126,12 +126,29 @@ pub fn energy_diff_l_cn(
     energy: &[[i64; 2]],
     cn_from: usize,
     cn_to: usize,
-    mut atom_typ_index: usize,
+    neigbors_of_from: [u8; super::NUM_ATOM_TYPES],
+    neigbors_of_to: [u8; super::NUM_ATOM_TYPES],
+    mut atom_typ_index_main: usize,
 ) -> i64 {
-    atom_typ_index -= 1;
-    let e = (2 * ((cn_to as i64) * energy[atom_typ_index][0] + energy[atom_typ_index][1]))
-        - (2 * ((cn_from as i64) * energy[atom_typ_index][0] + energy[atom_typ_index][1]));
-    e
+    atom_typ_index_main -= 1;
+    let mut energy_change = 0;
+    energy_change +=
+        (cn_to as i64) * energy[atom_typ_index_main][0] + energy[atom_typ_index_main][1];
+    energy_change -=
+        (cn_from as i64) * energy[atom_typ_index_main][0] + energy[atom_typ_index_main][1];
+    for (mut atom_typ_index, neigh) in neigbors_of_to.iter().enumerate() {
+        // atom_typ_index -= 1;
+        energy_change -= (*neigh as i64) * energy[atom_typ_index][0] + energy[atom_typ_index][1];
+    }
+    for (mut atom_typ_index, neigh) in neigbors_of_from.iter().enumerate() {
+        // atom_typ_index -= 1;
+        if atom_typ_index == atom_typ_index_main {
+            energy_change +=
+                (*neigh as i64 - 1) * energy[atom_typ_index][0] + energy[atom_typ_index][1];
+        }
+        energy_change += (*neigh as i64) * energy[atom_typ_index][0] + energy[atom_typ_index][1];
+    }
+    energy_change
 }
 pub fn energy_diff_l_gcn<I, O>(
     energy: &Vec<[i64; 2]>,

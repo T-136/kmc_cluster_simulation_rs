@@ -28,6 +28,7 @@ pub use sim::Results;
 
 const CN: usize = 12;
 // const GCN: usize = 54;
+const NUM_ATOM_TYPES: usize = 2;
 const GCN: usize = 145;
 const NN_PAIR_NUMBER: usize = 20;
 const NN_PAIR_NO_INTERSEC_NUMBER: usize = 7;
@@ -66,6 +67,7 @@ pub struct Simulation {
     heat_map_sections: Vec<Vec<u64>>,
     energy: EnergyInput,
     gridstructure: Arc<GridStructure>,
+    neighboring_atom_type_count: Vec<[u8; NUM_ATOM_TYPES]>,
 }
 
 impl Simulation {
@@ -117,12 +119,15 @@ impl Simulation {
         };
         let mut cn_metal: Vec<usize> = Vec::with_capacity(nsites as usize);
         let mut surface_count = vec![0; 3];
+        let mut neighboring_atom_type_count: Vec<[u8; NUM_ATOM_TYPES]> =
+            vec![[0; NUM_ATOM_TYPES]; nsites as usize];
 
         for o in 0..nsites {
             let mut neighbors: u8 = 0;
             for o1 in gridstructure.nn[&o].iter() {
                 if occ[*o1 as usize] != 0 {
                     // cn.entry(o).and_modify(|x| *x += 1).or_insert(1);
+                    neighboring_atom_type_count[o as usize][occ[*o1 as usize] as usize - 1] += 1;
                     neighbors += 1;
                 }
             }
@@ -253,6 +258,7 @@ impl Simulation {
             heat_map_sections,
             energy,
             gridstructure,
+            neighboring_atom_type_count,
         }
     }
 
@@ -569,6 +575,8 @@ impl Simulation {
                 }
             }
             self.cn_metal[o as usize] -= 1;
+            self.neighboring_atom_type_count[o as usize]
+                [self.occ[move_to as usize] as usize - 1] -= 1;
         }
         for o in to_change {
             // for o in self.gridstructure.nn[&move_to] {
@@ -584,10 +592,16 @@ impl Simulation {
                 }
             }
             self.cn_metal[o as usize] += 1;
+            self.neighboring_atom_type_count[o as usize]
+                [self.occ[move_to as usize] as usize - 1] += 1;
         }
 
         self.cn_metal[move_to as usize] -= 1;
         self.cn_metal[move_from as usize] += 1;
+        self.neighboring_atom_type_count[move_to as usize]
+            [self.occ[move_to as usize] as usize - 1] -= 1;
+        self.neighboring_atom_type_count[move_from as usize]
+            [self.occ[move_to as usize] as usize - 1] += 1;
 
         // if SAVE_ENTIRE_SIM || is_recording_sections {
         //     self.cn_dict[self.cn_metal[move_to as usize]] += 1;
@@ -718,11 +732,14 @@ impl Simulation {
 
     fn calc_energy_change_by_move(&self, move_from: u32, move_to: u32, atom_typ_index: u8) -> i64 {
         // println!("{}", atom_typ_index);
+        // println!("{:?}", self.neighboring_atom_type_count);
         match &self.energy {
             EnergyInput::LinearCn(energy_l_cn) => energy::energy_diff_l_cn(
                 energy_l_cn,
                 self.cn_metal[move_from as usize],
                 self.cn_metal[move_to as usize] - 1,
+                self.neighboring_atom_type_count[move_from as usize],
+                self.neighboring_atom_type_count[move_to as usize],
                 atom_typ_index as usize,
             ),
             EnergyInput::Cn(energy_cn) => {
