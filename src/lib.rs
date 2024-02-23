@@ -737,7 +737,7 @@ impl Simulation {
             EnergyInput::LinearCn(energy_l_cn) => energy::energy_diff_l_cn(
                 energy_l_cn,
                 self.cn_metal[move_from as usize],
-                self.cn_metal[move_to as usize] - 1,
+                self.cn_metal[move_to as usize],
                 self.neighboring_atom_type_count[move_from as usize],
                 self.neighboring_atom_type_count[move_to as usize],
                 atom_typ_index as usize,

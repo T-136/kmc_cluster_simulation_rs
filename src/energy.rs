@@ -1,13 +1,4 @@
-// Pt
-const M_BETA: i64 = -0330;
-const M_ALPHA: i64 = 3960;
-
 use core::panic;
-use std::sync::atomic;
-
-// Co
-// const M_BETA: i64 = -0219;
-// const M_ALPHA: i64 = 2628;
 
 // enrico
 
@@ -17,28 +8,6 @@ pub enum EnergyInput {
     Cn(Vec<[i64; 13]>),
     LinearGcn(Vec<[i64; 2]>),
     Gcn(Vec<[i64; 145]>),
-}
-
-const ENRICO_TABLE: [i64; 13] = [
-    2690, 1879, 1660, 1441, 1242, 1043, 814, 725, 546, 427, 0, 219, 0,
-];
-fn enrico_table(cn: usize) -> i64 {
-    match cn {
-        0 => 2690,
-        1 => 1879,
-        2 => 1660,
-        3 => 1441,
-        4 => 1242,
-        5 => 1043,
-        6 => 814,
-        7 => 725,
-        8 => 546,
-        9 => 427,
-        10 => 0,
-        11 => 219,
-        12 => 0,
-        _ => panic!("impossible cn found: {}", cn),
-    }
 }
 
 pub fn energy_1000_calculation(energy: &EnergyInput, cn: usize, mut atom_typ_index: usize) -> i64 {
@@ -86,6 +55,11 @@ where
     energy_diff_1000 -= energy[atom_typ_index][move_from_cn];
     energy_diff_1000 += energy[atom_typ_index][move_to_cn - 1];
 
+    println!(
+        "cn:{} {}  change: {}",
+        move_from_cn, move_to_cn, energy_diff_1000
+    );
+
     energy_diff_1000
 }
 pub fn energy_diff_gcn<I, O, P>(
@@ -132,22 +106,26 @@ pub fn energy_diff_l_cn(
 ) -> i64 {
     atom_typ_index_main -= 1;
     let mut energy_change = 0;
-    energy_change +=
-        (cn_to as i64) * energy[atom_typ_index_main][0] + energy[atom_typ_index_main][1];
     energy_change -=
         (cn_from as i64) * energy[atom_typ_index_main][0] + energy[atom_typ_index_main][1];
-    for (mut atom_typ_index, neigh) in neigbors_of_to.iter().enumerate() {
+    energy_change +=
+        (cn_to as i64 - 1) * energy[atom_typ_index_main][0] + energy[atom_typ_index_main][1];
+    for (atom_typ_index, neigh) in neigbors_of_from.iter().enumerate() {
         // atom_typ_index -= 1;
-        energy_change -= (*neigh as i64) * energy[atom_typ_index][0] + energy[atom_typ_index][1];
+        energy_change -= (*neigh as i64) * energy[atom_typ_index][0];
     }
-    for (mut atom_typ_index, neigh) in neigbors_of_from.iter().enumerate() {
+    for (atom_typ_index, neigh) in neigbors_of_to.iter().enumerate() {
         // atom_typ_index -= 1;
         if atom_typ_index == atom_typ_index_main {
-            energy_change +=
-                (*neigh as i64 - 1) * energy[atom_typ_index][0] + energy[atom_typ_index][1];
+            energy_change += (*neigh as i64 - 1) * energy[atom_typ_index][0];
+        } else {
+            energy_change += (*neigh as i64) * energy[atom_typ_index][0];
         }
-        energy_change += (*neigh as i64) * energy[atom_typ_index][0] + energy[atom_typ_index][1];
     }
+    // println!(
+    //     "cn:{} {} neigh: {:?} {:?} change: {}",
+    //     cn_from, cn_to, neigbors_of_from, neigbors_of_to, energy_change,
+    // );
     energy_change
 }
 pub fn energy_diff_l_gcn<I, O>(
