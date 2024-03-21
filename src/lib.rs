@@ -337,11 +337,8 @@ impl Simulation {
                 }
             };
             self.cond_snap_and_heat_map(&iiter);
-            if iiter % 10000 == 0 {
-                self.possible_moves.calc_total_k_change(self.temperature);
-            }
 
-            let (move_from, move_to, energy1000_diff, k_tot) = self
+            let (move_from, move_to, energy1000_diff, k_tot, move_k) = self
                 .possible_moves
                 .choose_ramdom_move_kmc(&mut rng_choose, self.temperature)
                 .expect("kmc pick move failed");
@@ -352,6 +349,9 @@ impl Simulation {
             if let Some(map) = &mut self.heat_map {
                 map[move_to as usize] += 1;
                 map[move_from as usize] += 1;
+            }
+            if k_tot * 0.2 <= move_k || iiter % 10000 == 0 {
+                self.possible_moves.calc_total_k_change(self.temperature);
             }
 
             if iiter * self.optimization_cut_off_fraction[1]
@@ -1337,11 +1337,4 @@ pub fn find_simulation_with_lowest_energy(folder: String) -> anyhow::Result<()> 
 enum FromOrTo {
     From,
     To,
-}
-fn one_if_12(cn: usize) -> f64 {
-    if cn != 12 {
-        1.
-    } else {
-        0.
-    }
 }

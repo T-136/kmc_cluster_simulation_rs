@@ -1,7 +1,3 @@
-use core::panic;
-
-// enrico
-
 #[derive(Clone, Debug)]
 pub enum EnergyInput {
     LinearCn(Vec<[i64; 2]>),

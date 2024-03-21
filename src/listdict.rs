@@ -113,7 +113,7 @@ impl ListDict {
         &mut self,
         rng_choose: &mut SmallRng,
         temp: f64,
-    ) -> Option<(u32, u32, i64, f64)> {
+    ) -> Option<(u32, u32, i64, f64, f64)> {
         // self.calc_total_k_change(temp);
         let between = Uniform::new_inclusive(0., 1.);
         let k_time_rng = between.sample(rng_choose) * self.total_k;
@@ -123,11 +123,11 @@ impl ListDict {
         //     format!("{:e}", k_time_rng),
         // );
         let mut cur_k = 0_f64;
-        let mut res: Option<(u32, u32, i64, f64)> = None;
+        let mut res: Option<(u32, u32, i64, f64, f64)> = None;
         for mmove in self.iter() {
             cur_k += mmove.k;
             if cur_k >= k_time_rng {
-                res = Some((mmove.from, mmove.to, mmove.energy, self.total_k));
+                res = Some((mmove.from, mmove.to, mmove.energy, self.total_k, mmove.k));
                 break;
             }
         }
