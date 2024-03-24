@@ -49,6 +49,7 @@ pub struct Simulation {
     onlyocc: HashSet<u32, fnv::FnvBuildHasher>,
     cn_metal: Vec<usize>,
     gcn_metal: Vec<usize>,
+    nn_support: Option<Vec<u8>>,
     possible_moves: listdict::ListDict,
     sim_time: f64,
     total_energy_1000: i64,
@@ -68,6 +69,7 @@ pub struct Simulation {
     energy: EnergyInput,
     gridstructure: Arc<GridStructure>,
     neighboring_atom_type_count: Vec<[u8; NUM_ATOM_TYPES]>,
+    support_e: i64,
 }
 
 impl Simulation {
@@ -86,10 +88,11 @@ impl Simulation {
         support_indices: Option<Vec<u32>>,
         gridstructure: Arc<GridStructure>,
         coating: Option<String>,
+        support_e: i64,
     ) -> Simulation {
         let nsites: u32 = GRID_SIZE[0] * GRID_SIZE[1] * GRID_SIZE[2] * 4;
         let mut cn_dict: [u32; CN + 1] = [0; CN + 1];
-        let (occ, onlyocc, number_all_atoms) = if input_file.is_some() {
+        let (occ, onlyocc, number_all_atoms, nn_support) = if input_file.is_some() {
             let xyz = read_and_write::read_sample(&input_file.unwrap());
             print!("{:?}", atom_names);
             let (occ, onlyocc) = setup::occ_onlyocc_from_xyz(
@@ -100,8 +103,14 @@ impl Simulation {
                 coating,
                 &gridstructure.nn,
             );
+            let mut nn_support = vec![0_u8; gridstructure.xsites_positions.len()];
+            setup::nn_support_from_supprt(&mut nn_support, &gridstructure.nn, &occ);
             let number_of_atoms: u32 = onlyocc.len() as u32;
-            (occ, onlyocc, number_of_atoms)
+            let mut opt_nn_support: Option<Vec<u8>> = None;
+            if nn_support.iter().sum::<u8>() > 0 {
+                opt_nn_support = Some(nn_support);
+            }
+            (occ, onlyocc, number_of_atoms, opt_nn_support)
         } else if atoms_input.is_some() {
             let (occ, onlyocc, nn_support) = setup::create_input_cluster(
                 &atoms_input.unwrap(),
@@ -113,7 +122,7 @@ impl Simulation {
                 &atom_names,
             );
             let number_of_atom: u32 = onlyocc.len() as u32;
-            (occ, onlyocc, number_of_atom)
+            (occ, onlyocc, number_of_atom, nn_support)
         } else {
             panic!("gib input atoms or input file");
         };
@@ -125,14 +134,14 @@ impl Simulation {
         for o in 0..nsites {
             let mut neighbors: u8 = 0;
             for o1 in gridstructure.nn[&o].iter() {
-                if occ[*o1 as usize] != 0 {
+                if occ[*o1 as usize] != 0 && occ[*o1 as usize] != 100 {
                     // cn.entry(o).and_modify(|x| *x += 1).or_insert(1);
                     neighboring_atom_type_count[o as usize][occ[*o1 as usize] as usize - 1] += 1;
                     neighbors += 1;
                 }
             }
             cn_metal.push(neighbors as usize);
-            if occ[o as usize] != 0 {
+            if occ[o as usize] != 0 && occ[o as usize] != 100 {
                 cn_dict[cn_metal[o as usize]] += 1;
                 if cn_metal[o as usize] != 12 {
                     surface_count[occ[o as usize] as usize] += 1;
@@ -240,6 +249,7 @@ impl Simulation {
             onlyocc,
             cn_metal,
             gcn_metal,
+            nn_support,
             possible_moves,
             sim_time: 0.,
             total_energy_1000,
@@ -259,6 +269,7 @@ impl Simulation {
             energy,
             gridstructure,
             neighboring_atom_type_count,
+            support_e,
         }
     }
 
@@ -289,12 +300,13 @@ impl Simulation {
         }
 
         for (i, o) in self.occ.iter().enumerate() {
-            if *o != 0 {
+            if *o != 0 && *o != 100 {
                 for u in &self.gridstructure.nn[&(i as u32)] {
                     if self.occ[*u as usize] == 0 {
                         // >1 so that atoms cant leave the cluster
                         // <x cant move if all neighbors are occupied
                         if self.cn_metal[*u as usize] > 1 {
+                            assert!(self.occ[*u as usize] != 100);
                             let energy = self.calc_energy_change_by_move(i as u32, *u, *o);
                             self.possible_moves
                                 .add_item(i as u32, *u, energy, self.temperature)
@@ -331,7 +343,7 @@ impl Simulation {
                     *x = 0;
                 });
                 for o in 0..self.cn_metal.len() {
-                    if self.occ[o] != 0 {
+                    if self.occ[o] != 0 && self.occ[o] != 100 {
                         self.cn_dict[self.cn_metal[o]] += 1;
                     };
                 }
@@ -753,7 +765,7 @@ impl Simulation {
                     energy_cn,
                     from_change.iter().filter_map(|x| {
                         let atom_typ_index = self.occ[*x as usize];
-                        if atom_typ_index != 0 {
+                        if atom_typ_index != 0 && atom_typ_index != 100 {
                             Some((self.cn_metal[*x as usize], atom_typ_index))
                         } else {
                             None
@@ -761,7 +773,7 @@ impl Simulation {
                     }),
                     to_change.iter().filter_map(|x| {
                         let atom_typ_index = self.occ[*x as usize];
-                        if atom_typ_index != 0 {
+                        if atom_typ_index != 0 && atom_typ_index != 100 {
                             Some((self.cn_metal[*x as usize], atom_typ_index))
                         } else {
                             None
@@ -953,7 +965,10 @@ impl Simulation {
                     + ((std::cmp::max(move_to, move_from) as u64) << 32))]
                     .iter()
                 {
-                    if self.occ[pos.0 as usize] != 0 && self.occ[pos.1 as usize] == 0 {
+                    if self.occ[pos.0 as usize] != 0
+                        && self.occ[pos.0 as usize] != 100
+                        && self.occ[pos.1 as usize] == 0
+                    {
                         let new_energy =
                             self.calc_energy_change_by_move(pos.0, pos.1, self.occ[pos.0 as usize]);
                         self.possible_moves.update_k_if_move_exists(
@@ -963,7 +978,10 @@ impl Simulation {
                             self.temperature,
                         );
                     }
-                    if self.occ[pos.1 as usize] != 0 && self.occ[pos.0 as usize] == 0 {
+                    if self.occ[pos.1 as usize] != 100
+                        && self.occ[pos.1 as usize] != 0
+                        && self.occ[pos.0 as usize] == 0
+                    {
                         let new_energy =
                             self.calc_energy_change_by_move(pos.1, pos.0, self.occ[pos.1 as usize]);
                         self.possible_moves.update_k_if_move_exists(
@@ -986,7 +1004,7 @@ impl Simulation {
             if self.occ[nn_to_from as usize] == 0 {
                 self.possible_moves.remove_item(move_from, nn_to_from);
             }
-            if self.occ[nn_to_from as usize] != 0 {
+            if self.occ[nn_to_from as usize] != 0 && self.occ[nn_to_from as usize] != 100 {
                 // greater than one because of neighbor moving in this spot
                 if self.cn_metal[move_from as usize] > 1 {
                     let energy_change = self.calc_energy_change_by_move(
@@ -994,6 +1012,7 @@ impl Simulation {
                         move_from,
                         self.occ[nn_to_from as usize],
                     );
+                    assert!(self.occ[nn_to_from as usize] != 100);
                     self.possible_moves.add_item(
                         nn_to_from,
                         move_from,
@@ -1005,7 +1024,7 @@ impl Simulation {
         }
 
         for nn_to_to in self.gridstructure.nn[&move_to] {
-            if self.occ[nn_to_to as usize] != 0 {
+            if self.occ[nn_to_to as usize] != 0 && self.occ[nn_to_to as usize] != 100 {
                 self.possible_moves.remove_item(nn_to_to, move_to);
             }
             if self.occ[nn_to_to as usize] == 0 {
@@ -1016,6 +1035,7 @@ impl Simulation {
                         nn_to_to,
                         self.occ[move_to as usize],
                     );
+                    assert!(self.occ[move_to as usize] != 100);
                     self.possible_moves.add_item(
                         move_to,
                         nn_to_to,

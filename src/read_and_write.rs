@@ -248,7 +248,7 @@ pub fn read_nn_pair_no_intersec(
         for (i, l) in test.iter().skip(2).enumerate() {
             if i < 7 {
                 neighbors[0][i] = l.parse::<u32>().unwrap()
-            } else {
+            } else if i < 14 {
                 neighbors[1][i - 7] = l.parse::<u32>().unwrap()
             }
         }

@@ -8,9 +8,8 @@ fn create_support(
     occ: &mut Vec<u8>,
     nn: &HashMap<u32, [u32; 12], FnvBuildHasher>,
     iclose: u32,
-) -> Vec<u32> {
+) -> Vec<u8> {
     let center_of_mass: &[f64; 3] = &xsites_positions[iclose as usize];
-    let mut nn_support = vec![0_u32; xsites_positions.len()];
     let mut support = Vec::new();
     let refpos = xsites_positions[0];
     for (i, xyz) in xsites_positions.iter().enumerate() {
@@ -19,7 +18,7 @@ fn create_support(
             norm += ((*x - center_of_mass[i2]) * support_indices[i2] as f64);
         }
         if norm.abs() < 1e-7 {
-            occ[i] = 2;
+            occ[i] = 100;
             support.push(i as u32)
         };
     }
@@ -36,19 +35,31 @@ fn create_support(
                 * support_indices[i2] as f64);
         }
         if norm.abs() < 1e-7 {
-            occ[i] = 2;
+            occ[i] = 100;
             support.push(i as u32)
         };
     }
-    for sup in support.iter() {
-        for neighbor in nn[sup] {
-            if !nn_support.contains(&neighbor) && occ[neighbor as usize] != 2 {
+    let mut nn_support = vec![0_u8; xsites_positions.len()];
+    nn_support_from_supprt(&mut nn_support, nn, occ);
+    // panic!("fds");
+    nn_support
+}
+
+pub fn nn_support_from_supprt(
+    nn_support: &mut Vec<u8>,
+    nn: &HashMap<u32, [u32; 12], FnvBuildHasher>,
+    occ: &Vec<u8>,
+) {
+    for atom in occ.iter() {
+        if atom != &100 {
+            continue;
+        }
+        for neighbor in nn[&(*atom as u32)] {
+            if occ[neighbor as usize] != 2 {
                 nn_support[neighbor as usize] = 1;
             }
         }
     }
-    // panic!("fds");
-    nn_support
 }
 
 pub fn create_input_cluster(
@@ -59,7 +70,7 @@ pub fn create_input_cluster(
     support_indices: Option<Vec<u32>>,
     coating: Option<String>,
     atom_names: &HashMap<String, u8>,
-) -> (Vec<u8>, HashSet<u32, FnvBuildHasher>, Option<Vec<u32>>) {
+) -> (Vec<u8>, HashSet<u32, FnvBuildHasher>, Option<Vec<u8>>) {
     let center_of_mass: [f64; 3] = {
         let mut d: [Vec<f64>; 3] = [Vec::new(), Vec::new(), Vec::new()];
         for coord in xsites_positions {
@@ -172,6 +183,7 @@ pub fn occ_onlyocc_from_xyz(
     coating: Option<String>,
     nn: &HashMap<u32, [u32; 12], FnvBuildHasher>,
 ) -> (Vec<u8>, HashSet<u32, FnvBuildHasher>) {
+    let supp_metal: String = "Al".to_string();
     let mut occ: Vec<u8> = vec![0; nsites as usize];
     let mut onlyocc: HashSet<u32, FnvBuildHasher> =
         fnv::FnvHashSet::with_capacity_and_hasher(xyz.len(), Default::default());
@@ -182,6 +194,10 @@ pub fn occ_onlyocc_from_xyz(
                 + (x.1[1] - xsites_positions[site as usize][1]).powf(2.)
                 + (x.1[2] - xsites_positions[site as usize][2]).powf(2.);
             if dist < 0.15 {
+                if x.0 == supp_metal {
+                    occ[site as usize] = 100;
+                    continue;
+                }
                 occ[site as usize] = atom_names[&x.0];
                 onlyocc.insert(site);
             }

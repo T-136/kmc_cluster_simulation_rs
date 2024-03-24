@@ -135,6 +135,9 @@ struct Args {
     #[arg(short, long, value_delimiter = '-', default_values_t = vec!(0,1))]
     repetition: Vec<usize>,
 
+    #[arg(long, allow_hyphen_values(true))]
+    support_e: Option<i64>,
+
     #[arg(short, long, default_value_t = String::from("../999-pair/"))]
     grid_folder: String,
 
@@ -161,9 +164,9 @@ fn file_paths(
     grid_folder: String,
 ) -> (
     String,
+    // String,
     String,
-    String,
-    String,
+    // String,
     String,
     String,
     String,
@@ -171,9 +174,9 @@ fn file_paths(
 ) {
     (
         format!("{}nearest_neighbor", grid_folder),
-        format!("{}next_nearest_neighbor", grid_folder),
+        // format!("{}next_nearest_neighbor", grid_folder),
         format!("{}nn_pairlist", grid_folder),
-        format!("{}nnn_pairlist", grid_folder),
+        // format!("{}nnn_pairlist", grid_folder),
         format!("{}atom_sites", grid_folder),
         format!("{}nn_pair_no_intersec", grid_folder),
         format!("{}nnn_gcn_no_intersec.json", grid_folder),
@@ -203,6 +206,7 @@ fn main() {
     if !std::path::Path::new(&save_folder).exists() {
         fs::create_dir_all(&save_folder).unwrap();
     }
+    let support_e = args.support_e.unwrap_or(0);
 
     // let (atoms_input, sup) =
     let (atoms_input, support_indices) = if let Some(atoms_input) = args.start_structure.atoms_input
@@ -217,9 +221,9 @@ fn main() {
     #[allow(unused_variables)]
     let (
         pairlist_file,
-        n_pairlist_file,
+        // n_pairlist_file,
         nn_pairlist_file,
-        nnn_pairlist_file,
+        // nnn_pairlist_file,
         atom_sites,
         nn_pair_no_int_file,
         nnn_pair_no_int_file,
@@ -238,7 +242,7 @@ fn main() {
     let optimization_cut_off_fraction: Vec<u64> = args.optimization_cut_off_fraction;
     let repetition = args.repetition;
 
-    let (energy, atom_names) = if args.e_l_cn.is_some() {
+    let (energy, mut atom_names) = if args.e_l_cn.is_some() {
         let (energy, atom_names) = collect_energy_values([0; 2], args.e_l_cn.unwrap());
         (EnergyInput::LinearCn(energy), atom_names)
     } else if args.e_cn.is_some() {
@@ -268,6 +272,7 @@ fn main() {
         surrounding_moves_file,
     );
     let gridstructure = Arc::new(gridstructure);
+    atom_names.insert("Al".to_string(), 100);
 
     for rep in repetition[0]..repetition[1] {
         let input_file = input_file.clone();
@@ -295,6 +300,7 @@ fn main() {
                 support_indices,
                 gridstructure_arc,
                 coating,
+                support_e,
             );
             let exp = sim.run(unique_levels);
             sim.write_exp_file(&exp);
