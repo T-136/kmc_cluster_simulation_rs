@@ -7,9 +7,9 @@ use std::fs;
 use std::io::{self, BufRead};
 use time_graph::instrument;
 
-fn find_key_for_value<'a>(map: &'a HashMap<String, u8>, value: &u8) -> Option<&'a str> {
+fn find_key_for_value<'a>(map: &'a HashMap<String, u8>, value: u8) -> Option<&'a str> {
     map.iter().find_map(|(key, val)| {
-        if val == value {
+        if val == &value {
             Some(key.as_str())
         } else {
             None
@@ -23,7 +23,7 @@ pub fn write_occ_as_xyz(
     onlyocc: HashSet<u32, fnv::FnvBuildHasher>,
     xsites_positions: &Vec<[f64; 3]>,
     unit_cell: &[f64; 3],
-    occ: &Vec<u8>,
+    atom_pos: &Vec<super::AtomPosition>,
     atom_names: &HashMap<String, u8>,
 ) {
     let mut trajectory = Trajectory::open(save_folder.clone() + "/lowest_energy.xyz", 'w').unwrap();
@@ -34,14 +34,15 @@ pub fn write_occ_as_xyz(
     let mut frame = Frame::new();
     frame.set_cell(&UnitCell::new(unit_cell.clone()));
 
-    for (i, atom) in occ.iter().enumerate() {
-        if atom == &0 {
+    for (i, atom) in atom_pos.iter().enumerate() {
+        if atom.occ == 0 {
             continue;
         }
         frame.add_atom(
             &Atom::new(
-                find_key_for_value(atom_names, atom)
-                    .expect(format!("unknown atom number {:?}, {:?}", atom_names, atom).as_str()),
+                find_key_for_value(atom_names, atom.occ).expect(
+                    format!("unknown atom number {:?}, {:?}", atom_names, atom.occ).as_str(),
+                ),
             ),
             xsites_positions[i],
             None,
@@ -84,7 +85,7 @@ fn fmt_scient(num: &str) -> f64 {
 }
 
 pub fn read_atom_sites(input_file: &str, nsites: u32) -> Vec<[f64; 3]> {
-    println!("reading atom_sites from: {}", input_file);
+    // println!("reading atom_sites from: {}", input_file);
     let mut xsites_positions: Vec<[f64; 3]> = Vec::with_capacity(nsites as usize);
     let pairlist = fs::File::open(input_file).expect("Should have been able to read the file");
     let lines = io::BufReader::new(pairlist);
@@ -100,7 +101,7 @@ pub fn read_atom_sites(input_file: &str, nsites: u32) -> Vec<[f64; 3]> {
 }
 
 pub fn read_nn(pairlist_file: &str) -> HashMap<u32, [u32; super::CN], FnvBuildHasher> {
-    println!("reading pairlists from: {}", pairlist_file);
+    // println!("reading pairlists from: {}", pairlist_file);
 
     let pairlist = fs::File::open(pairlist_file).expect("Should have been able to read the file");
 
@@ -122,7 +123,7 @@ pub fn read_nn(pairlist_file: &str) -> HashMap<u32, [u32; super::CN], FnvBuildHa
 }
 
 pub fn read_nnn(pairlist_file: &str) -> HashMap<u32, [u32; super::GCN], FnvBuildHasher> {
-    println!("reading pairlists from: {}", pairlist_file);
+    // println!("reading pairlists from: {}", pairlist_file);
 
     let pairlist = fs::File::open(pairlist_file).expect("Should have been able to read the file");
 

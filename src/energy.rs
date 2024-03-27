@@ -6,17 +6,20 @@ pub enum EnergyInput {
     Gcn(Vec<[i64; 145]>),
 }
 
-pub fn energy_1000_calculation(energy: &EnergyInput, cn: usize, mut atom_typ_index: usize) -> i64 {
+pub fn energy_1000_calculation(
+    energy: &EnergyInput,
+    cn: usize,
+    mut atom_typ_index: usize,
+    at_support: u8,
+    support_e: i64,
+) -> i64 {
     atom_typ_index -= 1;
     match energy {
-        EnergyInput::LinearCn(e) => e[atom_typ_index][0] * cn as i64 + e[atom_typ_index][1],
-        EnergyInput::Cn(e) => e[atom_typ_index][cn],
-        EnergyInput::LinearGcn(e) => {
-            // println!("e1 {}", e[0]);
-            // println!("e2 {}", e[1]);
-            // println!("cn {}", cn);
-            e[atom_typ_index][0] * cn as i64 + e[atom_typ_index][1]
+        EnergyInput::LinearCn(e) => {
+            e[atom_typ_index][0] * cn as i64 + e[atom_typ_index][1] + at_support as i64 * support_e
         }
+        EnergyInput::Cn(e) => e[atom_typ_index][cn] + at_support as i64 * support_e,
+        EnergyInput::LinearGcn(e) => e[atom_typ_index][0] * cn as i64 + e[atom_typ_index][1],
         EnergyInput::Gcn(e) => e[atom_typ_index][cn],
     }
     // enrico_table(cn[*atom as usize])
@@ -30,6 +33,9 @@ pub fn energy_diff_cn<I, O>(
     move_from_cn: usize,
     move_to_cn: usize,
     mut atom_typ_index: usize,
+    is_from_at_support: u8,
+    is_to_at_support: u8,
+    support_e: i64,
 ) -> i64
 where
     I: Iterator<Item = (usize, u8)>,
@@ -49,12 +55,13 @@ where
     }
     atom_typ_index -= 1;
     energy_diff_1000 -= energy[atom_typ_index][move_from_cn];
+    if is_from_at_support == 1 {
+        energy_diff_1000 -= support_e;
+    }
     energy_diff_1000 += energy[atom_typ_index][move_to_cn - 1];
-
-    println!(
-        "cn:{} {}  change: {}",
-        move_from_cn, move_to_cn, energy_diff_1000
-    );
+    if is_to_at_support == 1 {
+        energy_diff_1000 += support_e;
+    }
 
     energy_diff_1000
 }
@@ -96,9 +103,12 @@ pub fn energy_diff_l_cn(
     energy: &[[i64; 2]],
     cn_from: usize,
     cn_to: usize,
-    neigbors_of_from: [u8; super::NUM_ATOM_TYPES],
-    neigbors_of_to: [u8; super::NUM_ATOM_TYPES],
+    neigbors_of_from: &[u8; super::NUM_ATOM_TYPES],
+    neigbors_of_to: &[u8; super::NUM_ATOM_TYPES],
     mut atom_typ_index_main: usize,
+    is_from_at_support: u8,
+    is_to_at_support: u8,
+    support_e: i64,
 ) -> i64 {
     atom_typ_index_main -= 1;
     let mut energy_change = 0;
@@ -118,12 +128,15 @@ pub fn energy_diff_l_cn(
             energy_change += (*neigh as i64) * energy[atom_typ_index][0];
         }
     }
-    // println!(
-    //     "cn:{} {} neigh: {:?} {:?} change: {}",
-    //     cn_from, cn_to, neigbors_of_from, neigbors_of_to, energy_change,
-    // );
+    if is_from_at_support == 1 {
+        energy_change -= support_e;
+    }
+    if is_to_at_support == 1 {
+        energy_change += support_e;
+    }
     energy_change
 }
+
 pub fn energy_diff_l_gcn<I, O>(
     energy: &Vec<[i64; 2]>,
     cn_from_list: I,
