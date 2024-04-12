@@ -14,7 +14,8 @@ pub struct ListDict {
 pub struct Move {
     from: u32,
     pub to: u32,
-    energy: i64,
+    e_diff: f64,
+    e_barr: f64,
     k: f64,
 }
 
@@ -41,17 +42,25 @@ impl ListDict {
             .sum::<f64>()
     }
 
-    pub fn add_item(&mut self, move_from: u32, move_to: u32, energy_change: i64, temperature: f64) {
+    pub fn add_item(
+        &mut self,
+        move_from: u32,
+        move_to: u32,
+        e_diff: f64,
+        e_barr: f64,
+        temperature: f64,
+    ) {
         match self
             .move_to_position
             .entry((move_from as u64 + ((move_to as u64) << 32)))
         {
             std::collections::hash_map::Entry::Vacant(e) => {
-                let k = tst_rate_calculation(energy_change, temperature);
+                let k = tst_rate_calculation(e_diff, e_barr, temperature);
                 self.moves.push(Move {
                     from: move_from,
                     to: move_to,
-                    energy: energy_change,
+                    e_diff,
+                    e_barr,
                     k: k,
                 });
                 e.insert(self.moves.len() - 1);
@@ -85,7 +94,8 @@ impl ListDict {
         &mut self,
         move_from: u32,
         move_to: u32,
-        new_energy: i64,
+        e_diff: f64,
+        e_barr: f64,
         temperature: f64,
     ) {
         if let Some(position) = self
@@ -94,7 +104,7 @@ impl ListDict {
         {
             // let old_energy = std::mem::replace(&mut self.moves[*position].energy, new_energy);
 
-            let new_k = tst_rate_calculation(new_energy, temperature);
+            let new_k = tst_rate_calculation(e_diff, e_barr, temperature);
             // println!("new_k: {} e: {}", new_k, new_energy);
             self.total_k += new_k;
             // let old_k = std::mem::replace(&mut self.moves[*position].k, new_k);
@@ -105,7 +115,8 @@ impl ListDict {
             // );
             self.total_k -= self.moves[*position].k;
             self.moves[*position].k = new_k;
-            self.moves[*position].energy = new_energy;
+            self.moves[*position].e_diff = e_diff;
+            self.moves[*position].e_barr = e_barr;
         }
     }
 
@@ -113,7 +124,7 @@ impl ListDict {
         &mut self,
         rng_choose: &mut SmallRng,
         temp: f64,
-    ) -> Option<(u32, u32, i64, f64, f64)> {
+    ) -> Option<(u32, u32, f64, f64, f64, f64)> {
         // self.calc_total_k_change(temp);
         let between = Uniform::new_inclusive(0., 1.);
         let k_time_rng = between.sample(rng_choose) * self.total_k;
@@ -123,20 +134,28 @@ impl ListDict {
         //     format!("{:e}", k_time_rng),
         // );
         let mut cur_k = 0_f64;
-        let mut res: Option<(u32, u32, i64, f64, f64)> = None;
+        let mut res: Option<(u32, u32, f64, f64, f64, f64)> = None;
         for mmove in self.iter() {
             cur_k += mmove.k;
             if cur_k >= k_time_rng {
-                res = Some((mmove.from, mmove.to, mmove.energy, self.total_k, mmove.k));
-                break;
+                res = Some((
+                    mmove.from,
+                    mmove.to,
+                    mmove.e_diff,
+                    mmove.e_barr,
+                    self.total_k,
+                    mmove.k,
+                ));
+                return res;
             }
         }
-        // let calc_tot_k = self.iter().map(|mmove| mmove.k).sum::<f64>();
-        // println!(
-        //     "clac_tot_k/tot_k: {}, # moves: {}",
-        //     format!("{}", calc_tot_k / self.total_k),
-        //     format!("{}", self.iter().count()),
-        // );
+        let calc_tot_k = self.iter().map(|mmove| mmove.k).sum::<f64>();
+        println!(
+            "clac_tot_k/tot_k: {}, # moves: {}",
+            format!("{}", calc_tot_k / self.total_k),
+            format!("{}", self.iter().count()),
+        );
+        println!("tot_k: {}", self.total_k);
         res
     }
 
@@ -179,18 +198,14 @@ impl ListDict {
     }
 }
 
-fn tst_rate_calculation(energy_1000: i64, temperature: f64) -> f64 {
-    let e_use = if energy_1000.is_negative() {
-        0
-    } else {
-        energy_1000
-    };
-    const e_barrier_1000: i64 = 500;
+fn tst_rate_calculation(e_diff: f64, e_barr: f64, temperature: f64) -> f64 {
+    // let e_use = if e_diff.is_negative() { 0. } else { e_diff };
+    // println!("barr {}", e_barr);
+    // println!("diff {}", e_diff);
     const KB_joul: f64 = 1.380649e-23;
     const h_joul: f64 = 6.62607015e-34;
     const KB_eV: f64 = 8.6173324e-5;
-    (KB_joul * temperature / h_joul)
-        * (-(e_use + e_barrier_1000) as f64 / (KB_eV * temperature * 1000.)).exp()
+    (KB_joul * temperature / h_joul) * ((-e_barr) / (KB_eV * temperature)).exp()
 }
 
 // pub unsafe fn update_k_if_move_exists_par(

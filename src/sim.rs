@@ -37,8 +37,8 @@ pub struct Start {
 }
 
 impl Start {
-    pub fn new(total_energy_1000: i64, cn_dict: &[u32]) -> Start {
-        let start_energy = total_energy_1000 as f64 / 1000.;
+    pub fn new(total_energy: f64, cn_dict: &[u32]) -> Start {
+        let start_energy = total_energy as f64 / 1000.;
         let mut start_cn_dict = HashMap::new();
         for (k, v) in cn_dict.iter().enumerate() {
             start_cn_dict.insert(k as u8, *v);
@@ -54,8 +54,8 @@ impl Start {
 #[derive(Serialize, Deserialize)]
 pub struct Duration {
     pub sec: f64,
+    pub minutes: f64,
     pub hour: f64,
-    pub days: f64,
 }
 
 #[serde_as]
@@ -71,7 +71,7 @@ pub struct Results {
     pub energy_section_list: Vec<f64>,
     // pub cn_dict_sections: Vec<HashMap<u8, f64>>,
     #[serde_as(as = "Vec<(_, _)>")]
-    pub unique_levels: HashMap<BTreeMap<u8, u32>, (i64, u64)>,
+    pub unique_levels: HashMap<BTreeMap<u8, u32>, (f64, u64)>,
 }
 
 fn ordered_map<S>(value: &HashMap<u8, u32>, serializer: S) -> Result<S::Ok, S::Error>

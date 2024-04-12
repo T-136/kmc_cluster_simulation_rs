@@ -16,6 +16,7 @@ use std::io::BufReader;
 use std::sync::Arc;
 use std::{cmp, eprint, fs, println, usize};
 
+pub mod alpha_energy;
 pub mod energy;
 mod grid_structure;
 mod listdict;
@@ -32,6 +33,7 @@ const NUM_ATOM_TYPES: usize = 2;
 const GCN: usize = 145;
 const NN_PAIR_NUMBER: usize = 20;
 const NN_PAIR_NO_INTERSEC_NUMBER: usize = 7;
+const NN_PAIR_ONLY_INTERSEC_NUMBER: usize = 4;
 const NNN_PAIR_NO_INTERSEC_NUMBER: usize = 20;
 const AMOUNT_SECTIONS: usize = 1000;
 
@@ -43,9 +45,9 @@ const SAVE_ENTIRE_SIM: bool = true;
 pub struct AtomPosition {
     occ: u8,
     cn_metal: usize,
-    gcn_metal: usize,
+    energy: f64,
     nn_support: u8,
-    neighboring_atom_type_count: [u8; NUM_ATOM_TYPES],
+    nn_atom_type_count: [u8; NUM_ATOM_TYPES],
     nn: [u32; CN],
 }
 
@@ -59,7 +61,7 @@ pub struct Simulation {
     onlyocc: HashSet<u32, fnv::FnvBuildHasher>,
     possible_moves: listdict::ListDict,
     sim_time: f64,
-    total_energy_1000: i64,
+    total_energy: f64,
     cn_dict: [u32; CN + 1],
     cn_dict_at_supp: [u32; CN + 1],
     surface_count: Vec<i32>,
@@ -70,7 +72,7 @@ pub struct Simulation {
     energy_sections_list: Vec<f64>,
     surface_composition: Vec<f64>,
     optimization_cut_off_fraction: Vec<u64>,
-    unique_levels: HashMap<BTreeMap<u8, u32>, (i64, u64)>,
+    unique_levels: HashMap<BTreeMap<u8, u32>, (f64, u64)>,
     heat_map: Option<Vec<u64>>,
     snap_shot_sections: Option<Vec<Vec<u8>>>,
     heat_map_sections: Vec<Vec<u64>>,
@@ -98,7 +100,7 @@ impl Simulation {
         coating: Option<String>,
         support_e: i64,
     ) -> Simulation {
-        let nsites: u32 = GRID_SIZE[0] * GRID_SIZE[1] * GRID_SIZE[2] * 12;
+        let nsites: u32 = GRID_SIZE[0] * GRID_SIZE[1] * GRID_SIZE[2] * 4;
         let mut atom_pos: Vec<AtomPosition> = vec![AtomPosition::default(); nsites as usize];
         let mut cn_dict: [u32; CN + 1] = [0; CN + 1];
         let mut cn_dict_at_supp: [u32; CN + 1] = [0; CN + 1];
@@ -148,7 +150,7 @@ impl Simulation {
                 if atom_pos[*o1 as usize].occ != 0 && atom_pos[*o1 as usize].occ != 100 {
                     // cn.entry(o).and_modify(|x| *x += 1).or_insert(1);
                     let atom_type = atom_pos[*o1 as usize].occ as usize - 1;
-                    atom_pos[o].neighboring_atom_type_count[atom_type] += 1;
+                    atom_pos[o].nn_atom_type_count[atom_type] += 1;
                     neighbors += 1;
                 }
             }
@@ -176,32 +178,46 @@ impl Simulation {
             gcn_metal.push(gcn);
         }
 
-        let mut total_energy_1000: i64 = 0;
+        let mut total_energy: f64 = 0.;
         let possible_moves: listdict::ListDict = listdict::ListDict::new(GRID_SIZE);
         for o in onlyocc.iter() {
             let at_support = atom_pos[*o as usize].nn_support;
-            match energy {
-                EnergyInput::LinearCn(_) | EnergyInput::Cn(_) => {
-                    let energy_1000: i64 = energy::energy_1000_calculation(
-                        &energy,
-                        atom_pos[*o as usize].cn_metal,
-                        atom_pos[*o as usize].occ as usize,
-                        at_support,
-                        support_e,
-                    );
-                    total_energy_1000 += energy_1000;
-                }
+            // match energy {
+            //     EnergyInput::LinearCn(_) | EnergyInput::Cn(_) => {
+            //         let energy_1000: i64 = energy::energy_1000_calculation(
+            //             &energy,
+            //             atom_pos[*o as usize].cn_metal,
+            //             atom_pos[*o as usize].occ as usize,
+            //             at_support,
+            //             support_e,
+            //         );
+            //         total_energy += energy_1000;
+            //     }
 
-                EnergyInput::LinearGcn(_) | EnergyInput::Gcn(_) => {
-                    total_energy_1000 += energy::energy_1000_calculation(
-                        &energy,
-                        atom_pos[*o as usize].gcn_metal,
-                        atom_pos[*o as usize].occ as usize,
-                        at_support,
-                        support_e,
-                    )
-                }
-            };
+            // EnergyInput::LinearGcn(_) | EnergyInput::Gcn(_) => {
+            // println!("occ check{}", atom_pos[*o as usize].occ);
+            let energy = alpha_energy::e_one_atom(
+                (0, atom_pos[*o as usize].cn_metal),
+                atom_pos[*o as usize].nn_atom_type_count,
+                gridstructure.nn[o].iter().filter_map(|x| {
+                    if atom_pos[*x as usize].occ != 0 {
+                        Some((
+                            atom_pos[*x as usize].cn_metal,
+                            atom_pos[*x as usize].nn_atom_type_count,
+                            atom_pos[*x as usize].occ as usize,
+                        ))
+                    } else {
+                        None
+                    }
+                }),
+                atom_pos[*o as usize].occ as usize,
+                at_support,
+                support_e,
+            );
+            atom_pos[*o as usize].energy = energy;
+            total_energy += energy;
+            // }
+            // };
 
             // for u in &gridstructure.nn[o] {
             //     if occ[*u as usize] == 0 {
@@ -271,7 +287,7 @@ impl Simulation {
             onlyocc,
             possible_moves,
             sim_time: 0.,
-            total_energy_1000,
+            total_energy,
             cn_dict,
             cn_dict_at_supp,
             save_folder: sub_folder,
@@ -303,11 +319,11 @@ impl Simulation {
 
         let mut lowest_energy_struct = sim::LowestEnergy::default();
 
-        let mut temp_energy_section: i64 = 0;
+        let mut temp_energy_section: f64 = 0.;
         let mut temp_surface_composition: f64 = 0.;
         let mut temp_cn_dict_section: [u64; CN + 1] = [0; CN + 1];
 
-        let start = sim::Start::new(self.total_energy_1000, &self.cn_dict);
+        let start = sim::Start::new(self.total_energy, &self.cn_dict);
 
         let mut lowest_e_onlyocc: HashSet<u32, fnv::FnvBuildHasher> =
             fnv::FnvHashSet::with_capacity_and_hasher(
@@ -327,9 +343,16 @@ impl Simulation {
                         // >1 so that atoms cant leave the cluster
                         // <x cant move if all neighbors are occupied
                         if self.atom_pos[*u as usize].cn_metal > 1 {
-                            let energy = self.calc_energy_change_by_move(i as u32, *u, o.occ);
-                            self.possible_moves
-                                .add_item(i as u32, *u, energy, self.temperature)
+                            let (prev_e, future_e) =
+                                self.calc_energy_change_by_move(i as u32, *u, o.occ);
+                            let e_barr = alpha_energy::e_barrier(prev_e, future_e);
+                            self.possible_moves.add_item(
+                                i as u32,
+                                *u,
+                                future_e - prev_e,
+                                e_barr,
+                                self.temperature,
+                            )
                         }
                     }
                 }
@@ -352,6 +375,7 @@ impl Simulation {
                     iiter,
                     (iiter as f64 / self.niter as f64 * 100.)
                 );
+                println!("possible_moves len {}", self.possible_moves.moves.len())
             }
             let is_recording_sections = iiter * self.optimization_cut_off_fraction[1]
                 >= self.niter * self.optimization_cut_off_fraction[0];
@@ -376,12 +400,16 @@ impl Simulation {
             };
             self.cond_snap_and_heat_map(&iiter);
 
-            let (move_from, move_to, energy1000_diff, k_tot, move_k) = self
+            let (move_from, move_to, e_diff, e_barr, k_tot, move_k) = self
                 .possible_moves
                 .choose_ramdom_move_kmc(&mut rng_choose, self.temperature)
                 .expect("kmc pick move failed");
+            // println!(
+            //     "{}-{}: ktot:move_K {:.5}:{:.5} {:.2} {:.2}",
+            //     move_from, move_to, k_tot, move_k, e_diff, e_barr
+            // );
             self.increment_time(k_tot, &mut rng_choose);
-            self.perform_move(move_from, move_to, energy1000_diff, is_recording_sections);
+            self.perform_move(move_from, move_to, e_diff, is_recording_sections);
             self.update_total_k(move_from, move_to);
             self.update_possible_moves(move_from, move_to);
             if let Some(map) = &mut self.heat_map {
@@ -447,8 +475,8 @@ impl Simulation {
 
         let duration = sim::Duration {
             sec: self.sim_time,
+            minutes: self.sim_time / 60.,
             hour: self.sim_time / 60. / 60.,
-            days: self.sim_time / 60. / 60. / 24.,
         };
 
         Results {
@@ -469,6 +497,7 @@ impl Simulation {
         let rand_value: f64 = between.sample(rng_e_number);
         // println!("k_tot: {}, rand_value ln: {}", k_tot, rand_value.ln());
         self.sim_time -= rand_value.ln() / k_tot
+        // self.sim_time += 1. / k_tot
     }
 
     pub fn write_exp_file(&self, exp: &Results) {
@@ -480,15 +509,15 @@ impl Simulation {
     fn save_sections(
         &mut self,
         iiter: &u64,
-        mut temp_energy_section_1000: i64,
+        mut temp_energy_section: f64,
         mut temp_surface_composition: f64,
         temp_cn_dict_section: &mut [u64; CN + 1],
         amount_unique_levels: &mut i32,
         section_size: u64,
         SAVE_TH: u64,
-    ) -> (i64, f64) {
+    ) -> (f64, f64) {
         if (iiter + 1) % SAVE_TH == 0 {
-            temp_energy_section_1000 += self.total_energy_1000;
+            temp_energy_section += self.total_energy;
             temp_surface_composition += self.surface_count[1] as f64
                 / (self.surface_count[1] + self.surface_count[2]) as f64;
 
@@ -518,14 +547,14 @@ impl Simulation {
                             eprint!("amount_unique_levels reached");
                         }
                         *amount_unique_levels -= 1;
-                        entry.insert((self.total_energy_1000 / 1000, 1));
+                        entry.insert((self.total_energy, 1));
                     }
                 }
             }
         }
         if (iiter + 1) % section_size == 0 {
             self.energy_sections_list
-                .push(temp_energy_section_1000 as f64 / (section_size / SAVE_TH) as f64 / 1000.);
+                .push(temp_energy_section as f64 / (section_size / SAVE_TH) as f64);
 
             let mut section: HashMap<u8, f64> = HashMap::new();
             for (k, list) in temp_cn_dict_section.iter_mut().enumerate() {
@@ -540,9 +569,9 @@ impl Simulation {
 
             self.time_per_section.push(self.sim_time);
 
-            return (0, 0.);
+            return (0., 0.);
         }
-        (temp_energy_section_1000, temp_surface_composition)
+        (temp_energy_section, temp_surface_composition)
     }
 
     fn opt_save_lowest_energy(
@@ -550,7 +579,7 @@ impl Simulation {
         iiter: &u64,
         lowest_energy_struct: &mut sim::LowestEnergy,
     ) -> Option<HashSet<u32, fnv::FnvBuildHasher>> {
-        if lowest_energy_struct.energy > (self.total_energy_1000 as f64 / 1000.) {
+        if lowest_energy_struct.energy > (self.total_energy as f64 / 1000.) {
             let mut empty_neighbor_cn: HashMap<u8, u32> = HashMap::new();
             let empty_set: HashSet<&u32> =
                 HashSet::from_iter(self.possible_moves.iter().map(|mmove| &mmove.to));
@@ -563,7 +592,7 @@ impl Simulation {
                 }
             }
             lowest_energy_struct.empty_cn = empty_neighbor_cn;
-            lowest_energy_struct.energy = self.total_energy_1000 as f64 / 1000.;
+            lowest_energy_struct.energy = self.total_energy as f64 / 1000.;
             lowest_energy_struct.iiter = *iiter;
 
             let mut cn_hash_map: HashMap<u8, u32> = HashMap::new();
@@ -610,10 +639,10 @@ impl Simulation {
         &mut self,
         move_from: u32,
         move_to: u32,
-        energy1000_diff: i64,
+        e_diff: f64,
         is_recording_sections: bool,
     ) {
-        let (from_change, to_change) =
+        let (from_change, to_change, inter) =
             no_int_nn_from_move(move_from, move_to, &self.gridstructure.nn_pair_no_intersec);
 
         self.atom_pos[move_to as usize].occ = self.atom_pos[move_from as usize].occ; // covers different alloys also
@@ -659,7 +688,7 @@ impl Simulation {
                 }
             }
             self.atom_pos[o as usize].cn_metal -= 1;
-            self.atom_pos[o as usize].neighboring_atom_type_count[atom_type] -= 1;
+            self.atom_pos[o as usize].nn_atom_type_count[atom_type] -= 1;
         }
 
         for o in to_change {
@@ -687,129 +716,129 @@ impl Simulation {
                 }
             }
             self.atom_pos[o as usize].cn_metal += 1;
-            self.atom_pos[o as usize].neighboring_atom_type_count[atom_type] += 1;
+            self.atom_pos[o as usize].nn_atom_type_count[atom_type] += 1;
         }
 
         self.atom_pos[move_to as usize].cn_metal -= 1;
         self.atom_pos[move_from as usize].cn_metal += 1;
-        self.atom_pos[move_to as usize].neighboring_atom_type_count[atom_type] -= 1;
-        self.atom_pos[move_from as usize].neighboring_atom_type_count[atom_type] += 1;
+        self.atom_pos[move_to as usize].nn_atom_type_count[atom_type] -= 1;
+        self.atom_pos[move_from as usize].nn_atom_type_count[atom_type] += 1;
 
         // if SAVE_ENTIRE_SIM || is_recording_sections {
         //     self.cn_dict[self.atom_pos.cn_metal[move_to as usize]] += 1;
         // }
 
-        match self.energy {
-            EnergyInput::LinearCn(_) | EnergyInput::Cn(_) => {}
-            EnergyInput::LinearGcn(_) | EnergyInput::Gcn(_) => {
-                let (from_change, to_change, intersect, is_reverse) = no_int_nnn_from_move(
-                    move_from,
-                    move_to,
-                    &self.gridstructure.nnn_pair_no_intersec,
-                );
-                let (from_change_nn, to_change_nn) = no_int_nn_from_move(
-                    move_from,
-                    move_to,
-                    &self.gridstructure.nn_pair_no_intersec,
-                );
-                for o in from_change_nn {
-                    if o == move_to {
-                        continue;
-                    }
-                    if self.atom_pos[o as usize].occ == 1 {
-                        self.atom_pos[move_from as usize].gcn_metal -= 1;
-                    }
-                }
-                self.atom_pos[move_from as usize].gcn_metal +=
-                    self.atom_pos[move_to as usize].cn_metal;
-                for o in to_change_nn {
-                    if o == move_from {
-                        continue;
-                    }
-                    if self.atom_pos[o as usize].occ == 1 {
-                        self.atom_pos[move_to as usize].gcn_metal += 1;
-                    }
-                }
-                self.atom_pos[move_to as usize].gcn_metal -=
-                    self.atom_pos[move_from as usize].cn_metal - 1;
-                for atom_and_neighbors in to_change {
-                    for n in atom_and_neighbors.iter().skip(1) {
-                        if n == &move_to {
-                            self.atom_pos[atom_and_neighbors[0] as usize].gcn_metal +=
-                                self.atom_pos[*n as usize].cn_metal;
-                            continue;
-                        }
-                        #[cfg(debug_assertions)]
-                        if n == &move_from {
-                            panic!(
-                                "found move from {:?}, move_from {}",
-                                atom_and_neighbors, move_from
-                            );
-                        }
-                        if self.atom_pos[*n as usize].occ == 1 {
-                            self.atom_pos[atom_and_neighbors[0] as usize].gcn_metal += 1;
-                        }
-                    }
-                }
-                for atom_and_neighbors in from_change {
-                    // println!("gcn bef{:?}", self.atom_pos.gcn_metal[*atom as usize]);
-                    for n in atom_and_neighbors.iter().skip(1) {
-                        #[cfg(debug_assertions)]
-                        if n == &move_to {
-                            panic!("found move to");
-                        }
-                        if n == &move_from {
-                            // println!("cn move from {:?}", self.atom_pos.cn_metal[*n as usize] - 1);
-                            self.atom_pos[atom_and_neighbors[0] as usize].gcn_metal -=
-                                self.atom_pos[*n as usize].cn_metal - 1;
-                            continue;
-                        }
-                        if self.atom_pos[*n as usize].occ == 1 {
-                            // println!("-1",);
-                            self.atom_pos[atom_and_neighbors[0] as usize].gcn_metal -= 1;
-                        }
-                    }
-                }
-                for (atom, first_neighbors, second_neighbors, to_from_atoms) in intersect {
-                    if !is_reverse {
-                        for n in first_neighbors {
-                            if self.atom_pos[*n as usize].occ == 1 {
-                                self.atom_pos[*atom as usize].gcn_metal -= 1;
-                            }
-                        }
-                        for n in second_neighbors {
-                            if self.atom_pos[*n as usize].occ == 1 {
-                                self.atom_pos[*atom as usize].gcn_metal += 1;
-                            }
-                        }
-                    } else if is_reverse {
-                        for n in second_neighbors {
-                            if self.atom_pos[*n as usize].occ == 1 {
-                                self.atom_pos[*atom as usize].gcn_metal -= 1;
-                            }
-                        }
-                        for n in first_neighbors {
-                            if self.atom_pos[*n as usize].occ == 1 {
-                                self.atom_pos[*atom as usize].gcn_metal += 1;
-                            }
-                        }
-                    }
-                    for n in to_from_atoms {
-                        if n == &move_to {
-                            self.atom_pos[*atom as usize].gcn_metal +=
-                                self.atom_pos[*n as usize].cn_metal;
-                            continue;
-                        }
-                        if n == &move_from {
-                            self.atom_pos[*atom as usize].gcn_metal -=
-                                self.atom_pos[*n as usize].cn_metal - 1;
-                            continue;
-                        }
-                        panic!("neither start nor end found");
-                    }
-                }
-            }
-        }
+        // match self.energy {
+        //     EnergyInput::LinearCn(_) | EnergyInput::Cn(_) => {}
+        //     EnergyInput::LinearGcn(_) | EnergyInput::Gcn(_) => {
+        //         let (from_change, to_change, intersect, is_reverse) = no_int_nnn_from_move(
+        //             move_from,
+        //             move_to,
+        //             &self.gridstructure.nnn_pair_no_intersec,
+        //         );
+        //         let (from_change_nn, to_change_nn) = no_int_nn_from_move(
+        //             move_from,
+        //             move_to,
+        //             &self.gridstructure.nn_pair_no_intersec,
+        //         );
+        //         for o in from_change_nn {
+        //             if o == move_to {
+        //                 continue;
+        //             }
+        //             if self.atom_pos[o as usize].occ == 1 {
+        //                 self.atom_pos[move_from as usize].gcn_metal -= 1;
+        //             }
+        //         }
+        //         self.atom_pos[move_from as usize].gcn_metal +=
+        //             self.atom_pos[move_to as usize].cn_metal;
+        //         for o in to_change_nn {
+        //             if o == move_from {
+        //                 continue;
+        //             }
+        //             if self.atom_pos[o as usize].occ == 1 {
+        //                 self.atom_pos[move_to as usize].gcn_metal += 1;
+        //             }
+        //         }
+        //         self.atom_pos[move_to as usize].gcn_metal -=
+        //             self.atom_pos[move_from as usize].cn_metal - 1;
+        //         for atom_and_neighbors in to_change {
+        //             for n in atom_and_neighbors.iter().skip(1) {
+        //                 if n == &move_to {
+        //                     self.atom_pos[atom_and_neighbors[0] as usize].gcn_metal +=
+        //                         self.atom_pos[*n as usize].cn_metal;
+        //                     continue;
+        //                 }
+        //                 #[cfg(debug_assertions)]
+        //                 if n == &move_from {
+        //                     panic!(
+        //                         "found move from {:?}, move_from {}",
+        //                         atom_and_neighbors, move_from
+        //                     );
+        //                 }
+        //                 if self.atom_pos[*n as usize].occ == 1 {
+        //                     self.atom_pos[atom_and_neighbors[0] as usize].gcn_metal += 1;
+        //                 }
+        //             }
+        //         }
+        //         for atom_and_neighbors in from_change {
+        //             // println!("gcn bef{:?}", self.atom_pos.gcn_metal[*atom as usize]);
+        //             for n in atom_and_neighbors.iter().skip(1) {
+        //                 #[cfg(debug_assertions)]
+        //                 if n == &move_to {
+        //                     panic!("found move to");
+        //                 }
+        //                 if n == &move_from {
+        //                     // println!("cn move from {:?}", self.atom_pos.cn_metal[*n as usize] - 1);
+        //                     self.atom_pos[atom_and_neighbors[0] as usize].gcn_metal -=
+        //                         self.atom_pos[*n as usize].cn_metal - 1;
+        //                     continue;
+        //                 }
+        //                 if self.atom_pos[*n as usize].occ == 1 {
+        //                     // println!("-1",);
+        //                     self.atom_pos[atom_and_neighbors[0] as usize].gcn_metal -= 1;
+        //                 }
+        //             }
+        //         }
+        //         for (atom, first_neighbors, second_neighbors, to_from_atoms) in intersect {
+        //             if !is_reverse {
+        //                 for n in first_neighbors {
+        //                     if self.atom_pos[*n as usize].occ == 1 {
+        //                         self.atom_pos[*atom as usize].gcn_metal -= 1;
+        //                     }
+        //                 }
+        //                 for n in second_neighbors {
+        //                     if self.atom_pos[*n as usize].occ == 1 {
+        //                         self.atom_pos[*atom as usize].gcn_metal += 1;
+        //                     }
+        //                 }
+        //             } else if is_reverse {
+        //                 for n in second_neighbors {
+        //                     if self.atom_pos[*n as usize].occ == 1 {
+        //                         self.atom_pos[*atom as usize].gcn_metal -= 1;
+        //                     }
+        //                 }
+        //                 for n in first_neighbors {
+        //                     if self.atom_pos[*n as usize].occ == 1 {
+        //                         self.atom_pos[*atom as usize].gcn_metal += 1;
+        //                     }
+        //                 }
+        //             }
+        //             for n in to_from_atoms {
+        //                 if n == &move_to {
+        //                     self.atom_pos[*atom as usize].gcn_metal +=
+        //                         self.atom_pos[*n as usize].cn_metal;
+        //                     continue;
+        //                 }
+        //                 if n == &move_from {
+        //                     self.atom_pos[*atom as usize].gcn_metal -=
+        //                         self.atom_pos[*n as usize].cn_metal - 1;
+        //                     continue;
+        //                 }
+        //                 panic!("neither start nor end found");
+        //             }
+        //         }
+        //     }
+        // }
         if SAVE_ENTIRE_SIM || is_recording_sections {
             self.update_cn_dict(
                 self.atom_pos[move_to as usize].nn_support,
@@ -819,7 +848,7 @@ impl Simulation {
             // self.cn_dict[self.atom_pos[move_to as usize].cn_metal] += 1;
         }
 
-        self.total_energy_1000 += energy1000_diff;
+        self.total_energy += e_diff;
     }
 
     fn filter_map_energy_diff_cn(self, x: &u32) -> Option<(usize, u8)> {
@@ -834,277 +863,275 @@ impl Simulation {
         }
     }
 
-    fn calc_energy_change_by_move(&self, move_from: u32, move_to: u32, atom_typ_index: u8) -> i64 {
+    fn calc_energy_change_by_move(
+        &self,
+        move_from: u32,
+        move_to: u32,
+        atom_typ_index: u8,
+    ) -> (f64, f64) {
+        let atom_typ_index = atom_typ_index - 1;
         // println!("{}", atom_typ_index);
         // println!("{:?}", self.atom_pos.neigboring_atom_type_count);
-        match &self.energy {
-            EnergyInput::LinearCn(energy_l_cn) => energy::energy_diff_l_cn(
-                energy_l_cn,
-                self.atom_pos[move_from as usize].cn_metal,
-                self.atom_pos[move_to as usize].cn_metal,
-                &self.atom_pos[move_from as usize].neighboring_atom_type_count,
-                &self.atom_pos[move_to as usize].neighboring_atom_type_count,
-                atom_typ_index as usize,
-                self.atom_pos[move_from as usize].nn_support,
-                self.atom_pos[move_to as usize].nn_support,
-                self.support_e,
-            ),
-            EnergyInput::Cn(energy_cn) => {
-                let (from_change, to_change) = no_int_nn_from_move(
-                    move_from,
-                    move_to,
-                    &self.gridstructure.nn_pair_no_intersec,
-                );
+        //
+        let (from_change_nn, to_change_nn, inter_nn) =
+            no_int_nn_from_move(move_from, move_to, &self.gridstructure.nn_pair_no_intersec);
 
-                energy::energy_diff_cn(
-                    energy_cn,
-                    from_change.iter().filter_map(|x| {
-                        let atom_typ_index = self.atom_pos[*x as usize].occ;
-                        if atom_typ_index != 0 && atom_typ_index != 100 {
-                            Some((self.atom_pos[*x as usize].cn_metal, atom_typ_index))
-                        } else {
-                            None
-                        }
-                    }),
-                    to_change.iter().filter_map(|x| {
-                        let atom_typ_index = self.atom_pos[*x as usize].occ;
-                        if atom_typ_index != 0 && atom_typ_index != 100 {
-                            Some((self.atom_pos[*x as usize].cn_metal, atom_typ_index))
-                        } else {
-                            None
-                        }
-                    }),
-                    self.atom_pos[move_from as usize].cn_metal,
-                    self.atom_pos[move_to as usize].cn_metal,
-                    atom_typ_index as usize,
-                    self.atom_pos[move_from as usize].nn_support,
-                    self.atom_pos[move_to as usize].nn_support,
-                    self.support_e,
-                )
-            }
-            EnergyInput::LinearGcn(energy_l_gcn) => {
-                let (from_change, to_change) = no_int_nn_from_move(
-                    move_from,
-                    move_to,
-                    &self.gridstructure.nn_pair_no_intersec,
-                );
-                energy::energy_diff_l_gcn(
-                    energy_l_gcn,
-                    from_change
-                        .iter()
-                        .filter(|x| self.atom_pos[**x as usize].occ == 1)
-                        .map(|x| {
-                            let mut gcn = 0;
-                            for o in self.gridstructure.nn[x] {
-                                if self.atom_pos[o as usize].occ == 1 {
-                                    gcn += self.atom_pos[o as usize].cn_metal
-                                }
-                            }
-                            gcn
-                        }),
-                    to_change
-                        .iter()
-                        .filter(|x| self.atom_pos[**x as usize].occ == 1)
-                        .map(|x| {
-                            let mut gcn = 0;
-                            for o in self.gridstructure.nn[x] {
-                                if self.atom_pos[o as usize].occ == 1 {
-                                    gcn += self.atom_pos[o as usize].cn_metal
-                                }
-                            }
-                            gcn
-                        }),
-                    self.atom_pos[move_from as usize].cn_metal,
-                    self.atom_pos[move_to as usize].cn_metal,
-                    atom_typ_index as usize,
-                )
-            }
-            EnergyInput::Gcn(energy_gcn) => {
-                let (from_change, to_change, intersect, is_reverse) = no_int_nnn_from_move(
-                    move_from,
-                    move_to,
-                    &self.gridstructure.nnn_pair_no_intersec,
-                );
+        // let mut nn_atom_type_count_tst = [0; NUM_ATOM_TYPES];
+        let mut cn_tst = 0;
+        let mut from_nn_atom_type_no_tst = self.atom_pos[move_from as usize].nn_atom_type_count;
+        let mut to_nn_atom_type_count = self.atom_pos[move_to as usize].nn_atom_type_count;
+        to_nn_atom_type_count[atom_typ_index as usize] -= 1;
 
-                let (from_change_nn, to_change_nn) = no_int_nn_from_move(
-                    move_from,
-                    move_to,
-                    &self.gridstructure.nn_pair_no_intersec,
-                );
-
-                let mut cn_from = 0;
-                to_change_nn
-                    .iter()
-                    .filter(|x| self.atom_pos[**x as usize].occ == 1)
-                    .for_each(|_| cn_from += 1);
-
-                energy::energy_diff_gcn(
-                    energy_gcn,
-                    from_change
-                        .iter()
-                        .filter_map(|x| self.to_change_map(x, move_from, FromOrTo::From)),
-                    to_change.iter().filter_map(|atom_and_neighbors| {
-                        self.to_change_map(atom_and_neighbors, move_to, FromOrTo::To)
-                    }),
-                    intersect
-                        .iter()
-                        .filter(|atom_and_neighbors| {
-                            self.atom_pos[atom_and_neighbors.0 as usize].occ == 1
-                        })
-                        .map(|atom_and_neighbors| {
-                            self.map_intersec(atom_and_neighbors, move_to, move_from, is_reverse)
-                        }),
-                    self.atom_pos[move_from as usize].gcn_metal,
-                    self.atom_pos[move_to as usize].gcn_metal
-                        - self.atom_pos[move_from as usize].cn_metal
-                        + cn_from,
-                    atom_typ_index as usize,
-                )
+        // inter_nn.iter().for_each(|x| {
+        for x in inter_nn {
+            if self.atom_pos[x as usize].occ != 0 {
+                // nn_atom_type_count_tst[self.atom_pos[*x as usize].occ as usize - 1] += 1;
+                from_nn_atom_type_no_tst[self.atom_pos[x as usize].occ as usize - 1] -= 1;
+                to_nn_atom_type_count[self.atom_pos[x as usize].occ as usize - 1] -= 1;
+                cn_tst += 1;
             }
         }
-    }
+        // let tst_e = alpha_energy::e_one_atom(
+        //     (0, cn_tst),
+        //     nn_atom_type_count_tst,
+        //     inter_nn.iter().filter_map(|x| {
+        //         if self.atom_pos[*x as usize].occ != 0 {
+        //             Some((
+        //                 self.atom_pos[*x as usize].cn_metal,
+        //                 self.atom_pos[*x as usize].nn_atom_type_count,
+        //                 self.atom_pos[*x as usize].occ as usize,
+        //             ))
+        //         } else {
+        //             None
+        //         }
+        //     }),
+        //     self.atom_pos[move_from as usize].occ as usize,
+        //     0,
+        //     0,
+        // );
 
-    fn map_intersec(
-        &self,
-        atom_and_neighbors: &(u32, Vec<u32>, Vec<u32>, Vec<u32>),
-        move_to: u32,
-        move_from: u32,
-        is_reverse: bool,
-    ) -> (usize, usize) {
-        let old_gcn = self.atom_pos[atom_and_neighbors.0 as usize].gcn_metal;
-        let mut new_gcn = self.atom_pos[atom_and_neighbors.0 as usize].gcn_metal;
-        let (atom, first_neighbors, second_neighbors, to_from_atoms) = atom_and_neighbors;
-        first_neighbors
-            .iter()
-            .filter(|atom| {
-                self.atom_pos[**atom as usize].occ == 1 || **atom == move_to || **atom == move_from
-            })
-            .for_each(|_| {
-                if !is_reverse {
-                    new_gcn -= 1
+        let prev_e = alpha_energy::e_one_atom(
+            (cn_tst, self.atom_pos[move_from as usize].cn_metal),
+            // self.atom_pos[move_from as usize].nn_atom_type_count,
+            from_nn_atom_type_no_tst,
+            from_change_nn.iter().filter_map(|x| {
+                if self.atom_pos[*x as usize].occ != 0 {
+                    Some((
+                        self.atom_pos[*x as usize].cn_metal,
+                        self.atom_pos[*x as usize].nn_atom_type_count,
+                        self.atom_pos[*x as usize].occ as usize,
+                    ))
                 } else {
-                    new_gcn += 1
+                    None
                 }
-            });
-        second_neighbors
-            .iter()
-            .filter(|atom| {
-                self.atom_pos[**atom as usize].occ == 1 || **atom == move_to || **atom == move_from
-            })
-            .for_each(|x| {
-                if is_reverse {
-                    new_gcn -= 1
-                } else if !is_reverse {
-                    new_gcn += 1
-                }
-            });
-        to_from_atoms
-            .iter()
-            .filter(|atom| {
-                self.atom_pos[**atom as usize].occ == 1 || **atom == move_to || **atom == move_from
-            })
-            .for_each(|x| {
-                if x == &move_to {
-                    new_gcn += self.atom_pos[*x as usize].cn_metal - 1
-                } else if x == &move_from {
-                    new_gcn -= self.atom_pos[*x as usize].cn_metal
-                }
-            });
-        (old_gcn, new_gcn)
-    }
+            }),
+            self.atom_pos[move_from as usize].occ as usize,
+            0,
+            0,
+        );
 
-    fn to_change_map(
-        &self,
-        atom_and_neighbors: &Vec<u32>,
-        move_from_or_to: u32,
-        from_or_to: FromOrTo,
-        // move_to: u32,
-    ) -> Option<(usize, usize)> {
-        if self.atom_pos[*atom_and_neighbors.first().unwrap() as usize].occ == 1 {
-            let old_gcn = self.atom_pos[*atom_and_neighbors.first().unwrap() as usize].gcn_metal;
-            let mut new_gcn =
-                self.atom_pos[*atom_and_neighbors.first().unwrap() as usize].gcn_metal;
-            match from_or_to {
-                FromOrTo::From => {
-                    atom_and_neighbors
-                        .iter()
-                        .skip(1)
-                        .filter(|x| self.atom_pos[**x as usize].occ == 1 || **x == move_from_or_to)
-                        .for_each(|x| {
-                            if x == &move_from_or_to {
-                                new_gcn -= self.atom_pos[*x as usize].cn_metal
-                            } else {
-                                new_gcn -= 1
-                            }
-                        });
+        let future_e = alpha_energy::e_one_atom(
+            (cn_tst, self.atom_pos[move_to as usize].cn_metal - 1),
+            to_nn_atom_type_count,
+            to_change_nn.iter().filter_map(|x| {
+                if self.atom_pos[*x as usize].occ != 0 && *x != move_from {
+                    let mut cn_metal_future = self.atom_pos[*x as usize].cn_metal;
+                    let mut nn_atom_type_count_future =
+                        self.atom_pos[*x as usize].nn_atom_type_count;
+                    nn_atom_type_count_future[atom_typ_index as usize] += 1;
+                    cn_metal_future += 1;
+
+                    Some((
+                        cn_metal_future,
+                        nn_atom_type_count_future,
+                        self.atom_pos[*x as usize].occ as usize,
+                    ))
+                } else {
+                    None
                 }
-                FromOrTo::To => {
-                    atom_and_neighbors
-                        .iter()
-                        .skip(1)
-                        .filter(|x| self.atom_pos[**x as usize].occ == 1 || **x == move_from_or_to)
-                        .for_each(|x| {
-                            if x == &move_from_or_to {
-                                new_gcn += self.atom_pos[*x as usize].cn_metal - 1
-                            } else {
-                                new_gcn += 1
-                            }
-                        });
-                }
-            }
-            Some((old_gcn, new_gcn))
-        } else {
-            None
-        }
+            }),
+            self.atom_pos[move_from as usize].occ as usize,
+            0,
+            0,
+        );
+
+        (prev_e, future_e)
+        // match &self.energy {
+        //     EnergyInput::LinearCn(energy_l_cn) => energy::energy_diff_l_cn(
+        //         energy_l_cn,
+        //         self.atom_pos[move_from as usize].cn_metal,
+        //         self.atom_pos[move_to as usize].cn_metal,
+        //         &self.atom_pos[move_from as usize].nn_atom_type_count,
+        //         &self.atom_pos[move_to as usize].nn_atom_type_count,
+        //         atom_typ_index as usize,
+        //         self.atom_pos[move_from as usize].nn_support,
+        //         self.atom_pos[move_to as usize].nn_support,
+        //         self.support_e,
+        //     ),
+        //     EnergyInput::Cn(energy_cn) => {
+        //         let (from_change, to_change, inter) = no_int_nn_from_move(
+        //             move_from,
+        //             move_to,
+        //             &self.gridstructure.nn_pair_no_intersec,
+        //         );
+        //
+        //         energy::energy_diff_cn(
+        //             energy_cn,
+        //             from_change.iter().filter_map(|x| {
+        //                 let atom_typ_index = self.atom_pos[*x as usize].occ;
+        //                 if atom_typ_index != 0 && atom_typ_index != 100 {
+        //                     Some((self.atom_pos[*x as usize].cn_metal, atom_typ_index))
+        //                 } else {
+        //                     None
+        //                 }
+        //             }),
+        //             to_change.iter().filter_map(|x| {
+        //                 let atom_typ_index = self.atom_pos[*x as usize].occ;
+        //                 if atom_typ_index != 0 && atom_typ_index != 100 {
+        //                     Some((self.atom_pos[*x as usize].cn_metal, atom_typ_index))
+        //                 } else {
+        //                     None
+        //                 }
+        //             }),
+        //             self.atom_pos[move_from as usize].cn_metal,
+        //             self.atom_pos[move_to as usize].cn_metal,
+        //             atom_typ_index as usize,
+        //             self.atom_pos[move_from as usize].nn_support,
+        //             self.atom_pos[move_to as usize].nn_support,
+        //             self.support_e,
+        //         )
+        //     }
+        //     EnergyInput::LinearGcn(energy_l_gcn) => {
+        //         let (from_change, to_change, inter) = no_int_nn_from_move(
+        //             move_from,
+        //             move_to,
+        //             &self.gridstructure.nn_pair_no_intersec,
+        //         );
+        //         energy::energy_diff_l_gcn(
+        //             energy_l_gcn,
+        //             from_change
+        //                 .iter()
+        //                 .filter(|x| self.atom_pos[**x as usize].occ == 1)
+        //                 .map(|x| {
+        //                     let mut gcn = 0;
+        //                     for o in self.gridstructure.nn[x] {
+        //                         if self.atom_pos[o as usize].occ == 1 {
+        //                             gcn += self.atom_pos[o as usize].cn_metal
+        //                         }
+        //                     }
+        //                     gcn
+        //                 }),
+        //             to_change
+        //                 .iter()
+        //                 .filter(|x| self.atom_pos[**x as usize].occ == 1)
+        //                 .map(|x| {
+        //                     let mut gcn = 0;
+        //                     for o in self.gridstructure.nn[x] {
+        //                         if self.atom_pos[o as usize].occ == 1 {
+        //                             gcn += self.atom_pos[o as usize].cn_metal
+        //                         }
+        //                     }
+        //                     gcn
+        //                 }),
+        //             self.atom_pos[move_from as usize].cn_metal,
+        //             self.atom_pos[move_to as usize].cn_metal,
+        //             atom_typ_index as usize,
+        //         )
+        //     }
+        //     EnergyInput::Gcn(energy_gcn) => {
+        //         let (from_change, to_change, intersect, is_reverse) = no_int_nnn_from_move(
+        //             move_from,
+        //             move_to,
+        //             &self.gridstructure.nnn_pair_no_intersec,
+        //         );
+        //
+        //         let (from_change_nn, to_change_nn) = no_int_nn_from_move(
+        //             move_from,
+        //             move_to,
+        //             &self.gridstructure.nn_pair_no_intersec,
+        //         );
+        //
+        //         let mut cn_from = 0;
+        //         to_change_nn
+        //             .iter()
+        //             .filter(|x| self.atom_pos[**x as usize].occ == 1)
+        //             .for_each(|_| cn_from += 1);
+        //
+        //         alpha_energy::energy_diff_gcn(
+        //             from_change
+        //                 .iter()
+        //                 .filter_map(|x| self.to_change_map(x, move_from, FromOrTo::From)),
+        //             to_change.iter().filter_map(|atom_and_neighbors| {
+        //                 self.to_change_map(atom_and_neighbors, move_to, FromOrTo::To)
+        //             }),
+        //             intersect
+        //                 .iter()
+        //                 .filter(|atom_and_neighbors| {
+        //                     self.atom_pos[atom_and_neighbors.0 as usize].occ == 1
+        //                 })
+        //                 .map(|atom_and_neighbors| {
+        //                     self.map_intersec(atom_and_neighbors, move_to, move_from, is_reverse)
+        //                 }),
+        //             self.atom_pos[move_from as usize].gcn_metal,
+        //             self.atom_pos[move_to as usize].gcn_metal
+        //                 - self.atom_pos[move_from as usize].cn_metal
+        //                 + cn_from,
+        //             atom_typ_index as usize,
+        //         )
+        //     }
+        // }
     }
 
     fn update_total_k(&mut self, move_from: u32, move_to: u32) {
-        match self.energy {
-            EnergyInput::LinearCn(_) | EnergyInput::Cn(_) => {
-                // let i_slice = &self.gridstructure.nn_pair_no_intersec
-                //     [&(move_from as u64 + ((move_to as u64) << 32))];
-                for pos in self.gridstructure.surrounding_moves[&(std::cmp::min(move_from, move_to)
-                    as u64
-                    + ((std::cmp::max(move_to, move_from) as u64) << 32))]
-                    .iter()
-                {
-                    if self.atom_pos[pos.0 as usize].occ != 0
-                        && self.atom_pos[pos.0 as usize].occ != 100
-                        && self.atom_pos[pos.1 as usize].occ == 0
-                    {
-                        let new_energy = self.calc_energy_change_by_move(
-                            pos.0,
-                            pos.1,
-                            self.atom_pos[pos.0 as usize].occ,
-                        );
-                        self.possible_moves.update_k_if_move_exists(
-                            pos.0,
-                            pos.1,
-                            new_energy,
-                            self.temperature,
-                        );
-                    }
-                    if self.atom_pos[pos.1 as usize].occ != 100
-                        && self.atom_pos[pos.1 as usize].occ != 0
-                        && self.atom_pos[pos.0 as usize].occ == 0
-                    {
-                        let new_energy = self.calc_energy_change_by_move(
-                            pos.1,
-                            pos.0,
-                            self.atom_pos[pos.1 as usize].occ,
-                        );
-                        self.possible_moves.update_k_if_move_exists(
-                            pos.1,
-                            pos.0,
-                            new_energy,
-                            self.temperature,
-                        );
-                    }
-                }
+        // match self.energy {
+        //     EnergyInput::LinearCn(_) | EnergyInput::Cn(_) => {
+        // let i_slice = &self.gridstructure.nn_pair_no_intersec
+        //     [&(move_from as u64 + ((move_to as u64) << 32))];
+        for pos in self.gridstructure.surrounding_moves[&(std::cmp::min(move_from, move_to) as u64
+            + ((std::cmp::max(move_to, move_from) as u64) << 32))]
+            .iter()
+        {
+            if self.atom_pos[pos.0 as usize].occ != 0
+                && self.atom_pos[pos.0 as usize].occ != 100
+                && self.atom_pos[pos.1 as usize].occ == 0
+            {
+                let (prev_e, future_e) = self.calc_energy_change_by_move(
+                    pos.0,
+                    pos.1,
+                    self.atom_pos[pos.0 as usize].occ,
+                );
+                let e_barr = alpha_energy::e_barrier(prev_e, future_e);
+                self.possible_moves.update_k_if_move_exists(
+                    pos.0,
+                    pos.1,
+                    future_e - prev_e,
+                    e_barr,
+                    self.temperature,
+                );
             }
-            EnergyInput::LinearGcn(_) => todo!(),
-            EnergyInput::Gcn(_) => todo!(),
+            if self.atom_pos[pos.1 as usize].occ != 100
+                && self.atom_pos[pos.1 as usize].occ != 0
+                && self.atom_pos[pos.0 as usize].occ == 0
+            {
+                let (prev_e, future_e) = self.calc_energy_change_by_move(
+                    pos.1,
+                    pos.0,
+                    self.atom_pos[pos.1 as usize].occ,
+                );
+                let e_barr = alpha_energy::e_barrier(prev_e, future_e);
+                self.possible_moves.update_k_if_move_exists(
+                    pos.1,
+                    pos.0,
+                    future_e - prev_e,
+                    e_barr,
+                    self.temperature,
+                );
+            }
         }
+        //     }
+        //     EnergyInput::LinearGcn(_) => todo!(),
+        //     EnergyInput::Gcn(_) => todo!(),
+        // }
     }
 
     fn update_possible_moves(&mut self, move_from: u32, move_to: u32) {
@@ -1118,16 +1145,18 @@ impl Simulation {
             {
                 // greater than one because of neighbor moving in this spot
                 if self.atom_pos[move_from as usize].cn_metal > 1 {
-                    let energy_change = self.calc_energy_change_by_move(
+                    let (prev_e, future_e) = self.calc_energy_change_by_move(
                         nn_to_from,
                         move_from,
                         self.atom_pos[nn_to_from as usize].occ,
                     );
+                    let e_barr = alpha_energy::e_barrier(prev_e, future_e);
                     assert!(self.atom_pos[nn_to_from as usize].occ != 100);
                     self.possible_moves.add_item(
                         nn_to_from,
                         move_from,
-                        energy_change,
+                        future_e - prev_e,
+                        e_barr,
                         self.temperature,
                     );
                 }
@@ -1143,16 +1172,18 @@ impl Simulation {
             if self.atom_pos[nn_to_to as usize].occ == 0 {
                 // greater than one because of neighbor moving in this spot
                 if self.atom_pos[nn_to_to as usize].cn_metal > 1 {
-                    let energy_change = self.calc_energy_change_by_move(
+                    let (prev_e, future_e) = self.calc_energy_change_by_move(
                         move_to,
                         nn_to_to,
                         self.atom_pos[move_to as usize].occ,
                     );
+                    let e_barr = alpha_energy::e_barrier(prev_e, future_e);
                     assert!(self.atom_pos[move_to as usize].occ != 100);
                     self.possible_moves.add_item(
                         move_to,
                         nn_to_to,
-                        energy_change,
+                        future_e - prev_e,
+                        e_barr,
                         self.temperature,
                     );
                 }
@@ -1189,14 +1220,22 @@ impl Simulation {
 fn no_int_nn_from_move(
     move_from: u32,
     move_to: u32,
-    nn_pair_no_intersec: &HashMap<u64, [[u32; NN_PAIR_NO_INTERSEC_NUMBER]; 2], fnv::FnvBuildHasher>,
-) -> ([u32; 7], [u32; 7]) {
+    nn_pair_no_intersec: &HashMap<
+        u64,
+        (
+            [u32; NN_PAIR_NO_INTERSEC_NUMBER],
+            [u32; NN_PAIR_NO_INTERSEC_NUMBER],
+            [u32; NN_PAIR_ONLY_INTERSEC_NUMBER],
+        ),
+        fnv::FnvBuildHasher,
+    >,
+) -> ([u32; 7], [u32; 7], [u32; NN_PAIR_ONLY_INTERSEC_NUMBER]) {
     let no_int = nn_pair_no_intersec[&(std::cmp::min(move_from, move_to) as u64
         + ((std::cmp::max(move_to, move_from) as u64) << 32))];
     if move_to > move_from {
-        (no_int[0], no_int[1])
+        (no_int.0, no_int.1, no_int.2)
     } else {
-        (no_int[1], no_int[0])
+        (no_int.1, no_int.0, no_int.2)
     }
 }
 

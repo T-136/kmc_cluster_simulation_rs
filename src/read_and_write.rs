@@ -223,14 +223,29 @@ pub fn read_nnn_pair_no_intersec(
 
 pub fn read_nn_pair_no_intersec(
     nn_pairlist_file: &str,
-) -> HashMap<u64, [[u32; super::NN_PAIR_NO_INTERSEC_NUMBER]; 2], FnvBuildHasher> {
+) -> HashMap<
+    u64,
+    (
+        [u32; super::NN_PAIR_NO_INTERSEC_NUMBER],
+        [u32; super::NN_PAIR_NO_INTERSEC_NUMBER],
+        [u32; super::NN_PAIR_ONLY_INTERSEC_NUMBER],
+    ),
+    FnvBuildHasher,
+> {
     let nn_pairlist =
         fs::File::open(nn_pairlist_file).expect("Should have been able to read the file");
 
     let lines = io::BufReader::new(nn_pairlist);
 
-    let mut nn_pair: HashMap<u64, [[u32; super::NN_PAIR_NO_INTERSEC_NUMBER]; 2], FnvBuildHasher> =
-        FnvHashMap::with_capacity_and_hasher(32000, Default::default());
+    let mut nn_pair: HashMap<
+        u64,
+        (
+            [u32; super::NN_PAIR_NO_INTERSEC_NUMBER],
+            [u32; super::NN_PAIR_NO_INTERSEC_NUMBER],
+            [u32; super::NN_PAIR_ONLY_INTERSEC_NUMBER],
+        ),
+        FnvBuildHasher,
+    > = FnvHashMap::with_capacity_and_hasher(32000, Default::default());
 
     for line in lines.lines() {
         let r = line.unwrap();
@@ -243,14 +258,19 @@ pub fn read_nn_pair_no_intersec(
             test[0].parse::<u32>().unwrap(),
             test[1].parse::<u32>().unwrap(),
         );
-        let mut neighbors: [[u32; super::NN_PAIR_NO_INTERSEC_NUMBER]; 2] =
-            [[0; super::NN_PAIR_NO_INTERSEC_NUMBER]; 2];
+        let mut neighbors = (
+            [0_u32; super::NN_PAIR_NO_INTERSEC_NUMBER],
+            [0_u32; super::NN_PAIR_NO_INTERSEC_NUMBER],
+            [0_u32; super::NN_PAIR_ONLY_INTERSEC_NUMBER],
+        );
 
         for (i, l) in test.iter().skip(2).enumerate() {
             if i < 7 {
-                neighbors[0][i] = l.parse::<u32>().unwrap()
+                neighbors.0[i] = l.parse::<u32>().unwrap()
             } else if i < 14 {
-                neighbors[1][i - 7] = l.parse::<u32>().unwrap()
+                neighbors.1[i - 7] = l.parse::<u32>().unwrap()
+            } else {
+                neighbors.2[i - 14] = l.parse::<u32>().unwrap()
             }
         }
         nn_pair

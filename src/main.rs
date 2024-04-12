@@ -164,7 +164,7 @@ fn file_paths(
     grid_folder: String,
 ) -> (
     String,
-    // String,
+    String,
     String,
     // String,
     String,
@@ -174,7 +174,7 @@ fn file_paths(
 ) {
     (
         format!("{}nearest_neighbor", grid_folder),
-        // format!("{}next_nearest_neighbor", grid_folder),
+        format!("{}next_nearest_neighbor", grid_folder),
         format!("{}nn_pairlist", grid_folder),
         // format!("{}nnn_pairlist", grid_folder),
         format!("{}atom_sites", grid_folder),
@@ -220,8 +220,8 @@ fn main() {
 
     #[allow(unused_variables)]
     let (
-        pairlist_file,
-        // n_pairlist_file,
+        nn_file,
+        nnn_file,
         nn_pairlist_file,
         // nnn_pairlist_file,
         atom_sites,
@@ -242,36 +242,40 @@ fn main() {
     let optimization_cut_off_fraction: Vec<u64> = args.optimization_cut_off_fraction;
     let repetition = args.repetition;
 
-    let (energy, mut atom_names) = if args.e_l_cn.is_some() {
-        let (energy, atom_names) = collect_energy_values([0; 2], args.e_l_cn.unwrap());
-        (EnergyInput::LinearCn(energy), atom_names)
-    } else if args.e_cn.is_some() {
-        let (energy, atom_names) = collect_energy_values([0; 13], args.e_cn.unwrap());
-        (EnergyInput::Cn(energy), atom_names)
-    } else if args.e_l_gcn.is_some() {
-        let (energy, atom_names) = collect_energy_values([0; 2], args.e_l_gcn.unwrap());
-        (EnergyInput::LinearGcn(energy), atom_names)
-    } else if args.e_gcn.is_some() {
-        let (energy, atom_names) = collect_energy_values([0; 145], args.e_gcn.unwrap());
-        (EnergyInput::Gcn(energy), atom_names)
-    } else {
-        panic!("no energy")
-    };
-
-    println!("energy: {:?}", energy);
+    let mut atom_names: HashMap<String, u8> = HashMap::new();
+    let energy = EnergyInput::Gcn(vec![[0_i64; 145]]);
+    // let (energy, mut atom_names) = if args.e_l_cn.is_some() {
+    //     let (energy, atom_names) = collect_energy_values([0; 2], args.e_l_cn.unwrap());
+    //     (EnergyInput::LinearCn(energy), atom_names)
+    // } else if args.e_cn.is_some() {
+    //     let (energy, atom_names) = collect_energy_values([0; 13], args.e_cn.unwrap());
+    //     (EnergyInput::Cn(energy), atom_names)
+    // } else if args.e_l_gcn.is_some() {
+    //     let (energy, atom_names) = collect_energy_values([0; 2], args.e_l_gcn.unwrap());
+    //     (EnergyInput::LinearGcn(energy), atom_names)
+    // } else if args.e_gcn.is_some() {
+    //     let (energy, atom_names) = collect_energy_values([0; 145], args.e_gcn.unwrap());
+    //     (EnergyInput::Gcn(energy), atom_names)
+    // } else {
+    //     panic!("no energy")
+    // };
+    //
+    // println!("energy: {:?}", energy);
     println!("{:?}", repetition);
-
     let mut handle_vec = Vec::new();
+
     let gridstructure = GridStructure::new(
-        pairlist_file,
-        // n_pairlist_file,
+        nn_file,
+        // nnn_file,
         nn_pair_no_int_file,
-        nnn_pair_no_int_file,
+        // nnn_pair_no_int_file,
         atom_sites,
         bulk_file_name,
         surrounding_moves_file,
     );
     let gridstructure = Arc::new(gridstructure);
+    atom_names.insert("Pt".to_string(), 1);
+    atom_names.insert("Pd".to_string(), 2);
     atom_names.insert("Al".to_string(), 100);
 
     for rep in repetition[0]..repetition[1] {
