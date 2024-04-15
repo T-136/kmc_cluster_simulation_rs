@@ -876,7 +876,7 @@ impl Simulation {
         let (from_change_nn, to_change_nn, inter_nn) =
             no_int_nn_from_move(move_from, move_to, &self.gridstructure.nn_pair_no_intersec);
 
-        // let mut nn_atom_type_count_tst = [0; NUM_ATOM_TYPES];
+        let mut nn_atom_type_count_tst = [0; NUM_ATOM_TYPES];
         let mut cn_tst = 0;
         let mut from_nn_atom_type_no_tst = self.atom_pos[move_from as usize].nn_atom_type_count;
         let mut to_nn_atom_type_count = self.atom_pos[move_to as usize].nn_atom_type_count;
@@ -884,34 +884,41 @@ impl Simulation {
 
         // inter_nn.iter().for_each(|x| {
         for x in inter_nn {
-            if self.atom_pos[x as usize].occ != 0 {
-                // nn_atom_type_count_tst[self.atom_pos[*x as usize].occ as usize - 1] += 1;
-                from_nn_atom_type_no_tst[self.atom_pos[x as usize].occ as usize - 1] -= 1;
-                to_nn_atom_type_count[self.atom_pos[x as usize].occ as usize - 1] -= 1;
+            if self.atom_pos[x as usize].occ != 0 && x != move_from {
+                nn_atom_type_count_tst[self.atom_pos[x as usize].occ as usize - 1] += 1;
+                // from_nn_atom_type_no_tst[self.atom_pos[x as usize].occ as usize - 1] -= 1;
+                // to_nn_atom_type_count[self.atom_pos[x as usize].occ as usize - 1] -= 1;
                 cn_tst += 1;
             }
         }
-        // let tst_e = alpha_energy::e_one_atom(
-        //     (0, cn_tst),
-        //     nn_atom_type_count_tst,
-        //     inter_nn.iter().filter_map(|x| {
-        //         if self.atom_pos[*x as usize].occ != 0 {
-        //             Some((
-        //                 self.atom_pos[*x as usize].cn_metal,
-        //                 self.atom_pos[*x as usize].nn_atom_type_count,
-        //                 self.atom_pos[*x as usize].occ as usize,
-        //             ))
-        //         } else {
-        //             None
-        //         }
-        //     }),
-        //     self.atom_pos[move_from as usize].occ as usize,
-        //     0,
-        //     0,
-        // );
+
+        let tst_e = alpha_energy::e_one_atom_tst(
+            (0, cn_tst),
+            nn_atom_type_count_tst,
+            // inter_nn.iter().filter_map(|x| {
+            //     if self.atom_pos[*x as usize].occ != 0 {
+            //         let mut cn_metal_future = self.atom_pos[*x as usize].cn_metal;
+            //         let mut nn_atom_type_count_future =
+            //             self.atom_pos[*x as usize].nn_atom_type_count;
+            //         nn_atom_type_count_future[atom_typ_index as usize] += 1;
+            //         cn_metal_future += 1;
+            //
+            //         Some((
+            //             cn_metal_future,
+            //             nn_atom_type_count_future,
+            //             self.atom_pos[*x as usize].occ as usize,
+            //         ))
+            //     } else {
+            //         None
+            //     }
+            // }),
+            self.atom_pos[move_from as usize].occ as usize,
+            0,
+            0,
+        );
 
         let prev_e = alpha_energy::e_one_atom(
-            (cn_tst, self.atom_pos[move_from as usize].cn_metal),
+            (0, self.atom_pos[move_from as usize].cn_metal),
             // self.atom_pos[move_from as usize].nn_atom_type_count,
             from_nn_atom_type_no_tst,
             from_change_nn.iter().filter_map(|x| {
@@ -931,7 +938,7 @@ impl Simulation {
         );
 
         let future_e = alpha_energy::e_one_atom(
-            (cn_tst, self.atom_pos[move_to as usize].cn_metal - 1),
+            (0, self.atom_pos[move_to as usize].cn_metal - 1),
             to_nn_atom_type_count,
             to_change_nn.iter().filter_map(|x| {
                 if self.atom_pos[*x as usize].occ != 0 && *x != move_from {
@@ -955,7 +962,8 @@ impl Simulation {
             0,
         );
 
-        (prev_e, future_e)
+        // println!("prev_e: {}, future_e: {} tst_e {}", prev_e, future_e, tst_e);
+        (prev_e - tst_e, future_e - tst_e)
         // match &self.energy {
         //     EnergyInput::LinearCn(energy_l_cn) => energy::energy_diff_l_cn(
         //         energy_l_cn,
