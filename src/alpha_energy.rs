@@ -22,6 +22,8 @@ const alpha_pd: [[f64; 13]; 2] = [
     ],
 ];
 
+const METALS_N: usize = 2;
+const energy_const: [[[f64; 13]; METALS_N]; METALS_N] = [alpha_pt, alpha_pd];
 // fn morse_pot(tot_e: f64, dist: f64) -> f64 {
 //     let a = 1.;
 //     let x: f64 = (-a * dist);
@@ -43,37 +45,18 @@ pub fn e_barrier(prev_e: f64, future_e: f64) -> f64 {
     (prev_e - e_barr_correction).abs()
 }
 
-fn sum_alphas(
+fn get_alpha_vector(
     atom_type: usize,
     nn_atom_type_count: [u8; super::NUM_ATOM_TYPES],
     cn_metal: usize,
+    // energy_const: [[[f64; 13]; METALS_N]; METALS_N],
 ) -> f64 {
     // if could be taken out for summing over central atom
     if cn_metal == 0 {
         return 0.;
     }
-    let e = if atom_type == 1 {
-        alpha_pt[0][cn_metal]
-            + (alpha_pt[1][cn_metal] - alpha_pt[0][cn_metal]) / cn_metal as f64
-                * nn_atom_type_count[1] as f64
-        // + alpha_pt[1][cn_metal]
-        // + (alpha_pt[0][cn_metal] - alpha_pt[1][cn_metal]) / cn_metal as f64
-        //     * nn_atom_type_count[0] as f64
-    } else if atom_type == 2 {
-        alpha_pd[1][cn_metal]
-            + (alpha_pd[0][cn_metal] - alpha_pd[1][cn_metal]) / cn_metal as f64
-                * nn_atom_type_count[0] as f64
-        // + alpha_pd[1][cn_metal]
-        // + (alpha_pd[0][cn_metal] - alpha_pd[1][cn_metal]) / cn_metal as f64
-        //     * nn_atom_type_count[0] as f64
-        // alpha_pd[1][cn_metal] * nn_atom_type_count[1] as f64
-        //     + alpha_pd[0][cn_metal] * nn_atom_type_count[0] as f64
-    } else {
-        println!("atom type: {}", atom_type);
-        panic!("wtf");
-    };
-    // println!("{} {}", e, cn_metal);
-    e
+    let atom_type_index = atom_type - 1;
+    energy_const[atom_type_index][1][cn_metal] / cn_metal as f64 * nn_atom_type_count[1] as f64
 }
 
 pub fn e_one_atom<I>(
@@ -90,18 +73,29 @@ where
     assert!(nn_atom_type_count.iter().sum::<u8>() as usize == cn_metal_range.1 - cn_metal_range.0);
     let mut energy = 0.;
 
-    for cn_i in cn_metal_range.0..=cn_metal_range.1 {
-        energy += sum_alphas(atom_type, nn_atom_type_count, cn_i)
+    for (metal_type, nn_atom_type_count_num) in nn_atom_type_count.iter().enumerate() {
+        for cn_i in cn_metal_range.0..(cn_metal_range.1 + 1) {
+            if cn_i != 0 {
+                // energy += get_alpha_vector(atom_type, nn_atom_type_count, cn_i)
+                energy += energy_const[atom_type - 1][metal_type][cn_i] / cn_metal_range.1 as f64
+                    * *nn_atom_type_count_num as f64
+            }
+            assert!(!energy.is_nan());
+        }
     }
-    for nn_atom_type_count in nn_nn_atom_type_count {
-        // println!("atom neig type: {}", nn_atom_type_count.2);
-
-        assert!(nn_atom_type_count.1.iter().sum::<u8>() as usize == nn_atom_type_count.0);
-        energy += sum_alphas(
-            nn_atom_type_count.2,
-            nn_atom_type_count.1,
-            nn_atom_type_count.0,
-        )
+    for nn_atom_type_counts in nn_nn_atom_type_count {
+        assert!(nn_atom_type_counts.1.iter().sum::<u8>() as usize == nn_atom_type_counts.0);
+        for (metal_type, nn_atom_type_count_num) in nn_atom_type_counts.1.iter().enumerate() {
+            energy += energy_const[nn_atom_type_counts.2 - 1][metal_type][nn_atom_type_counts.0]
+                / nn_atom_type_counts.0 as f64
+                * *nn_atom_type_count_num as f64
+        }
+        assert!(!energy.is_nan());
+        // energy += get_alpha_vector(
+        //     nn_atom_type_counts.2,
+        //     nn_atom_type_counts.1,
+        //     nn_atom_type_counts.0,
+        // )
     }
     assert!(!energy.is_nan());
     energy
