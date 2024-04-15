@@ -24,6 +24,7 @@ mod read_and_write;
 mod setup;
 mod sim;
 
+pub use alpha_energy::AlphasTable;
 pub use grid_structure::GridStructure;
 pub use sim::Results;
 
@@ -77,6 +78,7 @@ pub struct Simulation {
     snap_shot_sections: Option<Vec<Vec<u8>>>,
     heat_map_sections: Vec<Vec<u64>>,
     energy: EnergyInput,
+    alphas: Arc<AlphasTable>,
     gridstructure: Arc<GridStructure>,
     support_e: i64,
     is_supported: bool,
@@ -95,6 +97,7 @@ impl Simulation {
         repetition: usize,
         optimization_cut_off_fraction: Vec<u64>,
         energy: EnergyInput,
+        alphas: Arc<AlphasTable>,
         support_indices: Option<Vec<u32>>,
         gridstructure: Arc<GridStructure>,
         coating: Option<String>,
@@ -303,6 +306,7 @@ impl Simulation {
             heat_map,
             heat_map_sections,
             energy,
+            alphas,
             gridstructure,
             // neighboring_atom_type_count,
             support_e,
@@ -892,8 +896,8 @@ impl Simulation {
             }
         }
 
-        let tst_e = alpha_energy::e_one_atom_tst(
-            (0, cn_tst),
+        let tst_e = self.alphas.e_one_atom_tst(
+            cn_tst,
             nn_atom_type_count_tst,
             // inter_nn.iter().filter_map(|x| {
             //     if self.atom_pos[*x as usize].occ != 0 {
@@ -917,8 +921,8 @@ impl Simulation {
             0,
         );
 
-        let prev_e = alpha_energy::e_one_atom(
-            (0, self.atom_pos[move_from as usize].cn_metal),
+        let prev_e = self.alphas.e_one_atom(
+            self.atom_pos[move_from as usize].cn_metal,
             // self.atom_pos[move_from as usize].nn_atom_type_count,
             from_nn_atom_type_no_tst,
             from_change_nn.iter().filter_map(|x| {
@@ -937,8 +941,8 @@ impl Simulation {
             0,
         );
 
-        let future_e = alpha_energy::e_one_atom(
-            (0, self.atom_pos[move_to as usize].cn_metal - 1),
+        let future_e = self.alphas.e_one_atom(
+            self.atom_pos[move_to as usize].cn_metal - 1,
             to_nn_atom_type_count,
             to_change_nn.iter().filter_map(|x| {
                 if self.atom_pos[*x as usize].occ != 0 && *x != move_from {

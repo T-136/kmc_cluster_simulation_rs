@@ -22,7 +22,7 @@ const alpha_pd: [[f64; 12]; 2] = [
     ],
 ];
 
-const energy_const: [[[f64; 12]; super::NUM_ATOM_TYPES]; super::NUM_ATOM_TYPES] =
+pub const energy_const: [[[f64; 12]; super::NUM_ATOM_TYPES]; super::NUM_ATOM_TYPES] =
     [alpha_pt, alpha_pd];
 // fn morse_pot(tot_e: f64, dist: f64) -> f64 {
 //     let a = 1.;
@@ -32,6 +32,149 @@ const energy_const: [[[f64; 12]; super::NUM_ATOM_TYPES]; super::NUM_ATOM_TYPES] 
 //     res
 // }
 
+#[derive(Clone)]
+pub struct AlphasTable {
+    //atom_type && in_atom_type as index (atom_type -1)
+    //atom_type_index;in_atom_type_index;cn-1;ammount_in_atom_type
+    pub alphas: [[[f64; 12]; super::NUM_ATOM_TYPES]; super::NUM_ATOM_TYPES],
+    pub alphas_summed_to_x: [[[f64; 12]; super::NUM_ATOM_TYPES]; super::NUM_ATOM_TYPES],
+}
+
+impl AlphasTable {
+    pub fn new(
+        alphas_input: [[[f64; 12]; super::NUM_ATOM_TYPES]; super::NUM_ATOM_TYPES],
+    ) -> AlphasTable {
+        let alphas_summed_to_x = AlphasTable::summ_alphas_to_x(&alphas_input);
+        AlphasTable {
+            alphas: alphas_input,
+            alphas_summed_to_x,
+        }
+    }
+
+    fn sum_up_to_cn(atom_type_index: usize, in_a_type_index: usize, cn: usize) -> f64 {
+        (0..(cn))
+            // .filter(|cn_i| *cn_i != 0)
+            .map(|cn_i| {
+                // energy += get_alpha_vector(atom_type, nn_atom_type_count, cn_i)
+                energy_const[atom_type_index][in_a_type_index][cn_i] / cn as f64
+            })
+            .sum::<f64>()
+    }
+
+    //in_metal;cn-1;foreign_cn
+    fn map_clean_diluted_to_matrix_sum(
+        clean_and_dilluted: &[[f64; 12]],
+        metal_i: usize,
+    ) -> [[f64; 12]; super::NUM_ATOM_TYPES] {
+        let mut metal = [[0_f64; 12]; super::NUM_ATOM_TYPES];
+
+        for (nn_m_i, metal_e_list) in clean_and_dilluted.iter().enumerate() {
+            for cn in 0..metal_e_list.len() {
+                metal[nn_m_i][cn] = AlphasTable::sum_up_to_cn(metal_i, nn_m_i, cn);
+            }
+        }
+
+        metal
+    }
+
+    fn summ_alphas_to_x(
+        alphas_input: &[[[f64; 12]; super::NUM_ATOM_TYPES]; super::NUM_ATOM_TYPES],
+    ) -> [[[f64; 12]; super::NUM_ATOM_TYPES]; super::NUM_ATOM_TYPES] {
+        let mut alphas_summed_to_x: [[[f64; 12]; super::NUM_ATOM_TYPES]; super::NUM_ATOM_TYPES] =
+            [[[0_f64; 12]; super::NUM_ATOM_TYPES]; super::NUM_ATOM_TYPES];
+
+        for (i, alpha_metal) in alphas_input.iter().enumerate() {
+            alphas_summed_to_x[i] = (AlphasTable::map_clean_diluted_to_matrix_sum(alpha_metal, i));
+        }
+        alphas_summed_to_x
+    }
+    pub fn e_one_atom_tst(
+        &self,
+        cn_metal: usize,
+        nn_atom_type_count: [u8; super::NUM_ATOM_TYPES],
+        atom_type: usize,
+        at_supp: u8,
+        supp_ee: i64,
+    ) -> f64 {
+        // assert!(nn_atom_type_count.iter().sum::<u8>() as usize == cn_metal_range.1 - cn_metal_range.0);
+        let mut energy = 0.;
+
+        // nn_atom_type_count
+        //     .iter()
+        //     .enumerate()
+        //     .for_each(|(metal_type, nn_atom_type_count_num)| {
+        //         energy += (0..(cn_metal_range.1))
+        //             // .filter(|cn_i| *cn_i != 0)
+        //             .map(|cn_i| {
+        //                 // energy += get_alpha_vector(atom_type, nn_atom_type_count, cn_i)
+        //                 energy_const[atom_type - 1][metal_type][cn_i] / cn_metal_range.1 as f64
+        //                     * *nn_atom_type_count_num as f64
+        //             })
+        //             .sum::<f64>();
+        //     });
+        //
+        nn_atom_type_count
+            .iter()
+            .enumerate()
+            .for_each(|(metal_type, nn_atom_type_count_num)| {
+                energy += self.alphas_summed_to_x[atom_type - 1][metal_type][cn_metal]
+                    * *nn_atom_type_count_num as f64
+            });
+        energy
+    }
+
+    pub fn e_one_atom<I>(
+        &self,
+        cn_metal: usize,
+        nn_atom_type_count: [u8; super::NUM_ATOM_TYPES],
+        nn_nn_atom_type_count: I,
+        atom_type: usize,
+        at_supp: u8,
+        supp_ee: i64,
+    ) -> f64
+    where
+        I: Iterator<Item = (usize, [u8; super::NUM_ATOM_TYPES], usize)>,
+    {
+        // assert!(nn_atom_type_count.iter().sum::<u8>() as usize == cn_metal_range.1 - cn_metal_range.0);
+        let mut energy = 0.;
+
+        // nn_atom_type_count.into_iter().enumerate().for_each(
+        //     |(metal_type, nn_atom_type_count_num)| {
+        //         energy += (0..(cn_metal_range.1))
+        //             // .filter(|cn_i| *cn_i != 0)
+        //             .map(|cn_i| {
+        //                 // energy += get_alpha_vector(atom_type, nn_atom_type_count, cn_i)
+        //                 energy_const[atom_type - 1][metal_type][cn_i] / cn_metal_range.1 as f64
+        //                     * nn_atom_type_count_num as f64
+        //             })
+        //             .sum::<f64>();
+        //     },
+        // );
+        nn_atom_type_count
+            .iter()
+            .enumerate()
+            .for_each(|(metal_type, nn_atom_type_count_num)| {
+                energy += self.alphas_summed_to_x[atom_type - 1][metal_type][cn_metal]
+                    * *nn_atom_type_count_num as f64
+            });
+        for nn_atom_type_counts in nn_nn_atom_type_count {
+            assert!(nn_atom_type_counts.1.iter().sum::<u8>() as usize == nn_atom_type_counts.0);
+            for (metal_type, nn_atom_type_count_num) in nn_atom_type_counts.1.iter().enumerate() {
+                energy += self.alphas[nn_atom_type_counts.2 - 1][metal_type]
+                    [nn_atom_type_counts.0 - 1]
+                    / nn_atom_type_counts.0 as f64
+                    * *nn_atom_type_count_num as f64
+            }
+            // energy += get_alpha_vector(
+            //     nn_atom_type_counts.2,
+            //     nn_atom_type_counts.1,
+            //     nn_atom_type_counts.0,
+            // )
+        }
+        assert!(!energy.is_nan());
+        energy
+    }
+}
 pub fn e_barrier(prev_e: f64, future_e: f64) -> f64 {
     const offset: f64 = 0.7;
     // println!("prev_e: {}", prev_e);
@@ -130,23 +273,26 @@ where
     energy
 }
 
-// pub fn simd_sum(values: &[f32]) -> f32 {
-//     let chunks = values.chunks_exact(LANES);
-//     let remainder = chunks.remainder();
-//
-//     let sum = chunks.fold([0.0f32; LANES], |mut acc, chunk| {
-//         let chunk: [f32; LANES] = chunk.try_into().unwrap();
-//         for i in 0..LANES {
-//             acc[i] += chunk[i];
-//         }
-//         acc
-//     });
-//
-//     let remainder: f32 = remainder.iter().copied().sum();
-//
-//     let mut reduced = 0.0f32;
-//     for i in 0..LANES {
-//         reduced += sum[i];
-//     }
-//     reduced + remainder
-// }
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_e_summed() {
+        let alphas_inp = [alpha_pt, alpha_pd];
+        let alphas = AlphasTable::new(alphas_inp);
+
+        let mut summed_alphas = 0.;
+        let cn = 3;
+        for cn_i in 0..cn {
+            summed_alphas += (alpha_pt[0][cn_i]) / 4. * 2.;
+            summed_alphas += alpha_pt[1][cn_i] / 4. * 2.;
+        }
+        assert!(
+            alphas.alphas_summed_to_x[0][0][cn - 1] * 2.
+                + alphas.alphas_summed_to_x[1][0][cn - 1] * 2.
+                - summed_alphas
+                < 0.00001
+        )
+    }
+}

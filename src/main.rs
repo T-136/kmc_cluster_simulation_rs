@@ -4,6 +4,7 @@ use clap::Parser;
 use core::panic;
 use csv::Reader;
 use csv::ReaderBuilder;
+use mc::alpha_energy;
 use mc::energy::EnergyInput;
 use mc::GridStructure;
 use mc::Simulation;
@@ -278,12 +279,16 @@ fn main() {
     atom_names.insert("Pd".to_string(), 2);
     atom_names.insert("Al".to_string(), 100);
 
+    let alphas = alpha_energy::AlphasTable::new(alpha_energy::energy_const);
+    let alphas_arc = Arc::new(alphas);
+
     for rep in repetition[0]..repetition[1] {
         let input_file = input_file.clone();
         let save_folder = save_folder.clone();
         let optimization_cut_off_fraction = optimization_cut_off_fraction.clone();
         let energy = energy.clone();
         let gridstructure_arc = Arc::clone(&gridstructure);
+        let alphas_arc = Arc::clone(&alphas_arc);
         let support_indices = support_indices.clone();
         let atom_names = atom_names.clone();
         let coating = coating.clone();
@@ -301,6 +306,7 @@ fn main() {
                 rep,
                 optimization_cut_off_fraction,
                 energy,
+                alphas_arc,
                 support_indices,
                 gridstructure_arc,
                 coating,
