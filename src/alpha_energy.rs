@@ -34,8 +34,7 @@ pub const energy_const: [[[f64; 12]; super::NUM_ATOM_TYPES]; super::NUM_ATOM_TYP
 
 #[derive(Clone)]
 pub struct AlphasTable {
-    //atom_type && in_atom_type as index (atom_type -1)
-    //atom_type_index;in_atom_type_index;cn-1;ammount_in_atom_type
+    //atom_type_index;in_atom_type_index;cn-1
     pub alphas: [[[f64; 12]; super::NUM_ATOM_TYPES]; super::NUM_ATOM_TYPES],
     pub alphas_summed_to_x: [[[f64; 12]; super::NUM_ATOM_TYPES]; super::NUM_ATOM_TYPES],
 }
@@ -61,7 +60,7 @@ impl AlphasTable {
             .sum::<f64>()
     }
 
-    //in_metal;cn-1;foreign_cn
+    //in_metal;cn-1
     fn map_clean_diluted_to_matrix_sum(
         clean_and_dilluted: &[[f64; 12]],
         metal_i: usize,
@@ -69,8 +68,8 @@ impl AlphasTable {
         let mut metal = [[0_f64; 12]; super::NUM_ATOM_TYPES];
 
         for (nn_m_i, metal_e_list) in clean_and_dilluted.iter().enumerate() {
-            for cn in 0..metal_e_list.len() {
-                metal[nn_m_i][cn] = AlphasTable::sum_up_to_cn(metal_i, nn_m_i, cn);
+            for cn_index in 0..metal_e_list.len() {
+                metal[nn_m_i][cn_index] = AlphasTable::sum_up_to_cn(metal_i, nn_m_i, cn_index + 1);
             }
         }
 
@@ -84,10 +83,11 @@ impl AlphasTable {
             [[[0_f64; 12]; super::NUM_ATOM_TYPES]; super::NUM_ATOM_TYPES];
 
         for (i, alpha_metal) in alphas_input.iter().enumerate() {
-            alphas_summed_to_x[i] = (AlphasTable::map_clean_diluted_to_matrix_sum(alpha_metal, i));
+            alphas_summed_to_x[i] = AlphasTable::map_clean_diluted_to_matrix_sum(alpha_metal, i);
         }
         alphas_summed_to_x
     }
+
     pub fn e_one_atom_tst(
         &self,
         cn_metal: usize,
@@ -113,11 +113,14 @@ impl AlphasTable {
         //             .sum::<f64>();
         //     });
         //
+        if cn_metal == 0 {
+            return 0.;
+        }
         nn_atom_type_count
             .iter()
             .enumerate()
             .for_each(|(metal_type, nn_atom_type_count_num)| {
-                energy += self.alphas_summed_to_x[atom_type - 1][metal_type][cn_metal]
+                energy += self.alphas_summed_to_x[atom_type - 1][metal_type][cn_metal - 1]
                     * *nn_atom_type_count_num as f64
             });
         energy
@@ -133,54 +136,57 @@ impl AlphasTable {
         supp_ee: i64,
     ) -> f64
     where
-        I: Iterator<Item = (usize, [u8; super::NUM_ATOM_TYPES], usize)>,
+        I: Iterator<Item = NnData>,
     {
         // assert!(nn_atom_type_count.iter().sum::<u8>() as usize == cn_metal_range.1 - cn_metal_range.0);
         let mut energy = 0.;
 
-        // nn_atom_type_count.into_iter().enumerate().for_each(
-        //     |(metal_type, nn_atom_type_count_num)| {
-        //         energy += (0..(cn_metal_range.1))
-        //             // .filter(|cn_i| *cn_i != 0)
-        //             .map(|cn_i| {
-        //                 // energy += get_alpha_vector(atom_type, nn_atom_type_count, cn_i)
-        //                 energy_const[atom_type - 1][metal_type][cn_i] / cn_metal_range.1 as f64
-        //                     * nn_atom_type_count_num as f64
-        //             })
-        //             .sum::<f64>();
-        //     },
-        // );
-        nn_atom_type_count
-            .iter()
-            .enumerate()
-            .for_each(|(metal_type, nn_atom_type_count_num)| {
-                energy += self.alphas_summed_to_x[atom_type - 1][metal_type][cn_metal]
-                    * *nn_atom_type_count_num as f64
-            });
-        for nn_atom_type_counts in nn_nn_atom_type_count {
-            assert!(nn_atom_type_counts.1.iter().sum::<u8>() as usize == nn_atom_type_counts.0);
-            for (metal_type, nn_atom_type_count_num) in nn_atom_type_counts.1.iter().enumerate() {
-                energy += self.alphas[nn_atom_type_counts.2 - 1][metal_type]
-                    [nn_atom_type_counts.0 - 1]
-                    / nn_atom_type_counts.0 as f64
-                    * *nn_atom_type_count_num as f64
-            }
-            // energy += get_alpha_vector(
-            //     nn_atom_type_counts.2,
-            //     nn_atom_type_counts.1,
-            //     nn_atom_type_counts.0,
-            // )
+        if cn_metal != 0 {
+            nn_atom_type_count.iter().enumerate().for_each(
+                |(metal_type, nn_atom_type_count_num)| {
+                    energy += self.alphas_summed_to_x[atom_type - 1][metal_type][cn_metal - 1]
+                        * *nn_atom_type_count_num as f64
+                },
+            );
         }
+        nn_nn_atom_type_count
+            .into_iter()
+            .for_each(|nn_atom_type_counts| {
+                assert!(
+                    nn_atom_type_counts
+                        .nn_atom_type_count_num_list
+                        .iter()
+                        .sum::<u8>() as usize
+                        == nn_atom_type_counts.cn_metal
+                );
+                nn_atom_type_counts
+                    .nn_atom_type_count_num_list
+                    .iter()
+                    .enumerate()
+                    .for_each(|(metal_type_index, nn_atom_type_count_num)| {
+                        energy += self.alphas[nn_atom_type_counts.atom_type - 1][metal_type_index]
+                            [nn_atom_type_counts.cn_metal - 1]
+                            / nn_atom_type_counts.cn_metal as f64
+                            * *nn_atom_type_count_num as f64
+                    })
+            });
         assert!(!energy.is_nan());
         energy
     }
 }
+
+pub struct NnData {
+    pub cn_metal: usize,
+    pub nn_atom_type_count_num_list: [u8; super::NUM_ATOM_TYPES],
+    pub atom_type: usize,
+}
+
 pub fn e_barrier(prev_e: f64, future_e: f64) -> f64 {
     const offset: f64 = 0.7;
     // println!("prev_e: {}", prev_e);
-    assert!(!prev_e.is_nan());
+    // assert!(!prev_e.is_nan());
     // println!("future_e: {}", future_e);
-    assert!(!future_e.is_nan());
+    // assert!(!future_e.is_nan());
     let e_barr_correction = -(offset * (1. - offset) * (prev_e.abs() * future_e.abs()).sqrt());
     // println!("res: {}", res);
 
