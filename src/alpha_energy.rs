@@ -34,18 +34,20 @@ pub const energy_const: [[[f64; 12]; super::NUM_ATOM_TYPES]; super::NUM_ATOM_TYP
 
 #[derive(Clone)]
 pub struct AlphasTable {
+    //alphas and alphas_summed_to_x are div by cn
     //atom_type_index;in_atom_type_index;cn-1
-    pub alphas: [[[f64; 12]; super::NUM_ATOM_TYPES]; super::NUM_ATOM_TYPES],
+    pub alphas_div_cn: [[[f64; 12]; super::NUM_ATOM_TYPES]; super::NUM_ATOM_TYPES],
     pub alphas_summed_to_x: [[[f64; 12]; super::NUM_ATOM_TYPES]; super::NUM_ATOM_TYPES],
 }
 
 impl AlphasTable {
     pub fn new(
-        alphas_input: [[[f64; 12]; super::NUM_ATOM_TYPES]; super::NUM_ATOM_TYPES],
+        mut alphas_input: [[[f64; 12]; super::NUM_ATOM_TYPES]; super::NUM_ATOM_TYPES],
     ) -> AlphasTable {
         let alphas_summed_to_x = AlphasTable::summ_alphas_to_x(&alphas_input);
+        AlphasTable::alphas_div_by_cn(&mut alphas_input);
         AlphasTable {
-            alphas: alphas_input,
+            alphas_div_cn: alphas_input,
             alphas_summed_to_x,
         }
     }
@@ -88,6 +90,18 @@ impl AlphasTable {
         alphas_summed_to_x
     }
 
+    fn alphas_div_by_cn(
+        alphas_input: &mut [[[f64; 12]; super::NUM_ATOM_TYPES]; super::NUM_ATOM_TYPES],
+    ) {
+        for i1 in 0..alphas_input.len() {
+            for i2 in 0..alphas_input[i1].len() {
+                for i3 in 0..alphas_input[i1][i2].len() {
+                    alphas_input[i1][i2][i3] = alphas_input[i1][i2][i3] / (i3 + 1) as f64;
+                }
+            }
+        }
+    }
+
     pub fn e_one_atom_tst(
         &self,
         cn_metal: usize,
@@ -96,26 +110,12 @@ impl AlphasTable {
         at_supp: u8,
         supp_ee: i64,
     ) -> f64 {
-        // assert!(nn_atom_type_count.iter().sum::<u8>() as usize == cn_metal_range.1 - cn_metal_range.0);
-        let mut energy = 0.;
-
-        // nn_atom_type_count
-        //     .iter()
-        //     .enumerate()
-        //     .for_each(|(metal_type, nn_atom_type_count_num)| {
-        //         energy += (0..(cn_metal_range.1))
-        //             // .filter(|cn_i| *cn_i != 0)
-        //             .map(|cn_i| {
-        //                 // energy += get_alpha_vector(atom_type, nn_atom_type_count, cn_i)
-        //                 energy_const[atom_type - 1][metal_type][cn_i] / cn_metal_range.1 as f64
-        //                     * *nn_atom_type_count_num as f64
-        //             })
-        //             .sum::<f64>();
-        //     });
-        //
         if cn_metal == 0 {
             return 0.;
         }
+
+        let mut energy = 0.;
+
         nn_atom_type_count
             .iter()
             .enumerate()
@@ -138,7 +138,6 @@ impl AlphasTable {
     where
         I: Iterator<Item = NnData>,
     {
-        // assert!(nn_atom_type_count.iter().sum::<u8>() as usize == cn_metal_range.1 - cn_metal_range.0);
         let mut energy = 0.;
 
         if cn_metal != 0 {
@@ -164,9 +163,9 @@ impl AlphasTable {
                     .iter()
                     .enumerate()
                     .for_each(|(metal_type_index, nn_atom_type_count_num)| {
-                        energy += self.alphas[nn_atom_type_counts.atom_type - 1][metal_type_index]
+                        energy += self.alphas_div_cn[nn_atom_type_counts.atom_type - 1][metal_type_index]
                             [nn_atom_type_counts.cn_metal - 1]
-                            / nn_atom_type_counts.cn_metal as f64
+                            // / nn_atom_type_counts.cn_metal as f64
                             * *nn_atom_type_count_num as f64
                     })
             });
@@ -215,7 +214,6 @@ pub fn e_one_atom_tst(
     at_supp: u8,
     supp_ee: i64,
 ) -> f64 {
-    // assert!(nn_atom_type_count.iter().sum::<u8>() as usize == cn_metal_range.1 - cn_metal_range.0);
     let mut energy = 0.;
 
     nn_atom_type_count
@@ -246,7 +244,6 @@ pub fn e_one_atom<I>(
 where
     I: Iterator<Item = (usize, [u8; super::NUM_ATOM_TYPES], usize)>,
 {
-    // assert!(nn_atom_type_count.iter().sum::<u8>() as usize == cn_metal_range.1 - cn_metal_range.0);
     let mut energy = 0.;
 
     nn_atom_type_count
