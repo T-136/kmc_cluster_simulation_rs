@@ -73,16 +73,19 @@ where
     assert!(nn_atom_type_count.iter().sum::<u8>() as usize == cn_metal_range.1 - cn_metal_range.0);
     let mut energy = 0.;
 
-    for (metal_type, nn_atom_type_count_num) in nn_atom_type_count.iter().enumerate() {
-        for cn_i in cn_metal_range.0..(cn_metal_range.1 + 1) {
-            if cn_i != 0 {
-                // energy += get_alpha_vector(atom_type, nn_atom_type_count, cn_i)
-                energy += energy_const[atom_type - 1][metal_type][cn_i] / cn_metal_range.1 as f64
-                    * *nn_atom_type_count_num as f64
-            }
-            assert!(!energy.is_nan());
-        }
-    }
+    nn_atom_type_count
+        .iter()
+        .enumerate()
+        .for_each(|(metal_type, nn_atom_type_count_num)| {
+            energy += (cn_metal_range.0..(cn_metal_range.1 + 1))
+                .filter(|cn_i| *cn_i != 0)
+                .map(|cn_i| {
+                    // energy += get_alpha_vector(atom_type, nn_atom_type_count, cn_i)
+                    energy_const[atom_type - 1][metal_type][cn_i] / cn_metal_range.1 as f64
+                        * *nn_atom_type_count_num as f64
+                })
+                .sum::<f64>();
+        });
     for nn_atom_type_counts in nn_nn_atom_type_count {
         assert!(nn_atom_type_counts.1.iter().sum::<u8>() as usize == nn_atom_type_counts.0);
         for (metal_type, nn_atom_type_count_num) in nn_atom_type_counts.1.iter().enumerate() {
@@ -90,7 +93,6 @@ where
                 / nn_atom_type_counts.0 as f64
                 * *nn_atom_type_count_num as f64
         }
-        assert!(!energy.is_nan());
         // energy += get_alpha_vector(
         //     nn_atom_type_counts.2,
         //     nn_atom_type_counts.1,
