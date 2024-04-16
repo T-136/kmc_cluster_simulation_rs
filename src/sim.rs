@@ -55,7 +55,7 @@ impl Start {
 pub struct Duration {
     pub sec: f64,
     pub minutes: f64,
-    pub hour: f64,
+    pub hours: f64,
 }
 
 #[serde_as]

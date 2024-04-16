@@ -24,7 +24,7 @@ mod read_and_write;
 mod setup;
 mod sim;
 
-pub use alpha_energy::AlphasTable;
+pub use alpha_energy::Alphas;
 pub use grid_structure::GridStructure;
 pub use sim::Results;
 
@@ -78,7 +78,7 @@ pub struct Simulation {
     snap_shot_sections: Option<Vec<Vec<u8>>>,
     heat_map_sections: Vec<Vec<u64>>,
     energy: EnergyInput,
-    alphas: Arc<AlphasTable>,
+    alphas: Arc<Alphas>,
     gridstructure: Arc<GridStructure>,
     support_e: i64,
     is_supported: bool,
@@ -97,7 +97,7 @@ impl Simulation {
         repetition: usize,
         optimization_cut_off_fraction: Vec<u64>,
         energy: EnergyInput,
-        alphas: Arc<AlphasTable>,
+        alphas: Arc<Alphas>,
         support_indices: Option<Vec<u32>>,
         gridstructure: Arc<GridStructure>,
         coating: Option<String>,
@@ -480,7 +480,7 @@ impl Simulation {
         let duration = sim::Duration {
             sec: self.sim_time,
             minutes: self.sim_time / 60.,
-            hour: self.sim_time / 60. / 60.,
+            hours: self.sim_time / 60. / 60.,
         };
 
         Results {

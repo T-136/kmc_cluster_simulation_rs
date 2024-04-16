@@ -1,29 +1,57 @@
 // first one clean
 const alpha_pt: [[f64; 12]; 2] = [
     [
-        -1.5045, -1.0045, -0.5045, -0.1870, -0.1860, -0.1850, -0.1840, -0.1830, -0.1820, -0.1220,
-        -0.0340, -0.0330,
+        // -2.74574, -0.86615, -0.68165, -0.18156, -0.18146, -0.18136, -0.18126, -0.15201, -0.15191,
+        // -0.03632, -0.03622,
+        // -0.019765,
+        -2.74574, -0.86615, -0.68165, -0.18156, -0.18146, -0.18136, -0.18126, -0.15201, -0.15191,
+        -0.03632, -0.03622,
+        -0.03612,
+        //old:
+        // -1.5045, -1.0045, -0.5045, -0.1870, -0.1860, -0.1850, -0.1840, -0.1830, -0.1820, -0.1220,
+        // -0.0340, -0.0330,
     ],
     [
-        -1.1843, -0.8843, -0.1843, -0.2389, -0.2379, -0.2369, -0.2359, -0.2349, -0.2339, -0.2139,
-        -0.0862, -0.0852,
+        // -1.70894, -0.65027, -0.60655, -0.08254, -0.08244, -0.08234, -0.08224, -0.08214, -0.08204,
+        // -0.08194, -0.08184,
+        // -0.074097,
+        -1.70894, -0.65027, -0.60655, -0.08254, -0.08244, -0.08234, -0.08224, -0.08214, -0.08204,
+        -0.08194, -0.08184,
+        -0.05881,
+        //old:
+        // -1.1843, -0.8843, -0.1843, -0.2389, -0.2379, -0.2369, -0.2359, -0.2349, -0.2339, -0.2139,
+        // -0.0862, -0.0852,
     ],
 ];
 
 //second one clean
 const alpha_pd: [[f64; 12]; 2] = [
     [
-        -1.3012, -0.8012, -0.3012, -0.1102, -0.1092, -0.1082, -0.1072, -0.1062, -0.1052, -0.0436,
-        -0.0068, -0.0058,
+        // -1.61277, -0.76781, -0.76267, -0.33190, -0.33180, -0.33170, -0.33160, -0.27197, -0.27187,
+        // -0.02403, -0.02393,
+        // 0.41626,
+        -1.61277, -0.76781, -0.76267, -0.33190, -0.33180, -0.33170, -0.33160, -0.27197, -0.27187,
+        -0.02403, -0.02393,
+        -0.02383,
+        //old:
+        // -0.416261.3012, -0.8012, -0.3012, -0.1102, -0.1092, -0.1082, -0.1072, -0.1062, -0.1052, -0.0436,
+        // -0.0068, -0.0058,
     ],
     [
-        -1.0094, -1.0094, -0.5094, -0.1497, -0.1487, -0.1403, -0.1393, -0.1352, -0.1342, -0.0906,
-        -0.0896, -0.0871,
+        // -0.79154, -0.62089, -0.62079, -0.16854, -0.13978, -0.13968, -0.13958, -0.13948, -0.13938,
+        // -0.10637, -0.09711,
+        // -0.08424,
+        -0.79154, -0.62089, -0.62079, -0.16854, -0.13978, -0.13968, -0.13958, -0.13948, -0.13938,
+        -0.10637, -0.09711,
+        -0.09701,
+        //old:
+        // -1.0094, -1.0094, -0.5094, -0.1497, -0.1487, -0.1403, -0.1393, -0.1352, -0.1342, -0.0906,
+        // -0.0896, -0.0871,
     ],
 ];
 
 pub const energy_const: [[[f64; 12]; super::NUM_ATOM_TYPES]; super::NUM_ATOM_TYPES] =
-    [alpha_pt, alpha_pd];
+    [alpha_pd, alpha_pt];
 // fn morse_pot(tot_e: f64, dist: f64) -> f64 {
 //     let a = 1.;
 //     let x: f64 = (-a * dist);
@@ -33,22 +61,22 @@ pub const energy_const: [[[f64; 12]; super::NUM_ATOM_TYPES]; super::NUM_ATOM_TYP
 // }
 
 #[derive(Clone)]
-pub struct AlphasTable {
+pub struct Alphas {
     //alphas and alphas_summed_to_x are div by cn
     //atom_type_index;in_atom_type_index;cn-1
-    pub alphas_div_cn: [[[f64; 12]; super::NUM_ATOM_TYPES]; super::NUM_ATOM_TYPES],
-    pub alphas_summed_to_x: [[[f64; 12]; super::NUM_ATOM_TYPES]; super::NUM_ATOM_TYPES],
+    pub dived_cn: [[[f64; 12]; super::NUM_ATOM_TYPES]; super::NUM_ATOM_TYPES],
+    pub summed_to_x_div_cn: [[[f64; 12]; super::NUM_ATOM_TYPES]; super::NUM_ATOM_TYPES],
 }
 
-impl AlphasTable {
+impl Alphas {
     pub fn new(
         mut alphas_input: [[[f64; 12]; super::NUM_ATOM_TYPES]; super::NUM_ATOM_TYPES],
-    ) -> AlphasTable {
-        let alphas_summed_to_x = AlphasTable::summ_alphas_to_x(&alphas_input);
-        AlphasTable::alphas_div_by_cn(&mut alphas_input);
-        AlphasTable {
-            alphas_div_cn: alphas_input,
-            alphas_summed_to_x,
+    ) -> Alphas {
+        let alphas_summed_to_x = Alphas::summ_alphas_to_x(&alphas_input);
+        Alphas::alphas_div_by_cn(&mut alphas_input);
+        Alphas {
+            dived_cn: alphas_input,
+            summed_to_x_div_cn: alphas_summed_to_x,
         }
     }
 
@@ -71,7 +99,7 @@ impl AlphasTable {
 
         for (nn_m_i, metal_e_list) in clean_and_dilluted.iter().enumerate() {
             for cn_index in 0..metal_e_list.len() {
-                metal[nn_m_i][cn_index] = AlphasTable::sum_up_to_cn(metal_i, nn_m_i, cn_index + 1);
+                metal[nn_m_i][cn_index] = Alphas::sum_up_to_cn(metal_i, nn_m_i, cn_index + 1);
             }
         }
 
@@ -85,7 +113,7 @@ impl AlphasTable {
             [[[0_f64; 12]; super::NUM_ATOM_TYPES]; super::NUM_ATOM_TYPES];
 
         for (i, alpha_metal) in alphas_input.iter().enumerate() {
-            alphas_summed_to_x[i] = AlphasTable::map_clean_diluted_to_matrix_sum(alpha_metal, i);
+            alphas_summed_to_x[i] = Alphas::map_clean_diluted_to_matrix_sum(alpha_metal, i);
         }
         alphas_summed_to_x
     }
@@ -120,7 +148,7 @@ impl AlphasTable {
             .iter()
             .enumerate()
             .for_each(|(metal_type, nn_atom_type_count_num)| {
-                energy += self.alphas_summed_to_x[atom_type - 1][metal_type][cn_metal - 1]
+                energy += self.summed_to_x_div_cn[atom_type - 1][metal_type][cn_metal - 1]
                     * *nn_atom_type_count_num as f64
             });
         energy
@@ -143,7 +171,7 @@ impl AlphasTable {
         if cn_metal != 0 {
             nn_atom_type_count.iter().enumerate().for_each(
                 |(metal_type, nn_atom_type_count_num)| {
-                    energy += self.alphas_summed_to_x[atom_type - 1][metal_type][cn_metal - 1]
+                    energy += self.summed_to_x_div_cn[atom_type - 1][metal_type][cn_metal - 1]
                         * *nn_atom_type_count_num as f64
                 },
             );
@@ -163,7 +191,7 @@ impl AlphasTable {
                     .iter()
                     .enumerate()
                     .for_each(|(metal_type_index, nn_atom_type_count_num)| {
-                        energy += self.alphas_div_cn[nn_atom_type_counts.atom_type - 1][metal_type_index]
+                        energy += self.dived_cn[nn_atom_type_counts.atom_type - 1][metal_type_index]
                             [nn_atom_type_counts.cn_metal - 1]
                             // / nn_atom_type_counts.cn_metal as f64
                             * *nn_atom_type_count_num as f64
@@ -283,7 +311,7 @@ mod tests {
     #[test]
     fn test_e_summed() {
         let alphas_inp = [alpha_pt, alpha_pd];
-        let alphas = AlphasTable::new(alphas_inp);
+        let alphas = Alphas::new(alphas_inp);
 
         let mut summed_alphas = 0.;
         let cn = 3;
@@ -292,8 +320,8 @@ mod tests {
             summed_alphas += alpha_pt[1][cn_i] / 4. * 2.;
         }
         assert!(
-            alphas.alphas_summed_to_x[0][0][cn - 1] * 2.
-                + alphas.alphas_summed_to_x[1][0][cn - 1] * 2.
+            alphas.summed_to_x_div_cn[0][0][cn - 1] * 2.
+                + alphas.summed_to_x_div_cn[1][0][cn - 1] * 2.
                 - summed_alphas
                 < 0.00001
         )

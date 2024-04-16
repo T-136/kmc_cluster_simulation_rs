@@ -279,7 +279,7 @@ fn main() {
     atom_names.insert("Pd".to_string(), 2);
     atom_names.insert("Al".to_string(), 100);
 
-    let alphas = alpha_energy::AlphasTable::new(alpha_energy::energy_const);
+    let alphas = alpha_energy::Alphas::new(alpha_energy::energy_const);
     let alphas_arc = Arc::new(alphas);
 
     for rep in repetition[0]..repetition[1] {
