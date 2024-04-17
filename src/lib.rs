@@ -49,7 +49,6 @@ pub struct AtomPosition {
     energy: f64,
     nn_support: u8,
     nn_atom_type_count: [u8; NUM_ATOM_TYPES],
-    nn: [u32; CN],
 }
 
 #[derive(Clone)]

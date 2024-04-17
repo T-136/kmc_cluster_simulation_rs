@@ -51,7 +51,7 @@ const alpha_pd: [[f64; 12]; 2] = [
 ];
 
 pub const energy_const: [[[f64; 12]; super::NUM_ATOM_TYPES]; super::NUM_ATOM_TYPES] =
-    [alpha_pd, alpha_pt];
+    [alpha_pt, alpha_pd];
 // fn morse_pot(tot_e: f64, dist: f64) -> f64 {
 //     let a = 1.;
 //     let x: f64 = (-a * dist);
@@ -64,7 +64,7 @@ pub const energy_const: [[[f64; 12]; super::NUM_ATOM_TYPES]; super::NUM_ATOM_TYP
 pub struct Alphas {
     //alphas and alphas_summed_to_x are div by cn
     //atom_type_index;in_atom_type_index;cn-1
-    pub dived_cn: [[[f64; 12]; super::NUM_ATOM_TYPES]; super::NUM_ATOM_TYPES],
+    pub cn: [[[f64; 12]; super::NUM_ATOM_TYPES]; super::NUM_ATOM_TYPES],
     pub summed_to_x_div_cn: [[[f64; 12]; super::NUM_ATOM_TYPES]; super::NUM_ATOM_TYPES],
 }
 
@@ -73,9 +73,11 @@ impl Alphas {
         mut alphas_input: [[[f64; 12]; super::NUM_ATOM_TYPES]; super::NUM_ATOM_TYPES],
     ) -> Alphas {
         let alphas_summed_to_x = Alphas::summ_alphas_to_x(&alphas_input);
-        Alphas::alphas_div_by_cn(&mut alphas_input);
+        //maybe there is a way to increase performance with div_by_cn but understand floating
+        //better first
+        // Alphas::alphas_div_by_cn(&mut alphas_input);
         Alphas {
-            dived_cn: alphas_input,
+            cn: alphas_input,
             summed_to_x_div_cn: alphas_summed_to_x,
         }
     }
@@ -124,7 +126,7 @@ impl Alphas {
         for i1 in 0..alphas_input.len() {
             for i2 in 0..alphas_input[i1].len() {
                 for i3 in 0..alphas_input[i1][i2].len() {
-                    alphas_input[i1][i2][i3] = alphas_input[i1][i2][i3] / (i3 + 1) as f64;
+                    alphas_input[i1][i2][i3] = (alphas_input[i1][i2][i3] / (i3 + 1) as f64);
                 }
             }
         }
@@ -150,6 +152,7 @@ impl Alphas {
             .for_each(|(metal_type, nn_atom_type_count_num)| {
                 energy += self.summed_to_x_div_cn[atom_type - 1][metal_type][cn_metal - 1]
                     * *nn_atom_type_count_num as f64
+                // / cn_metal as f64
             });
         energy
     }
@@ -173,6 +176,7 @@ impl Alphas {
                 |(metal_type, nn_atom_type_count_num)| {
                     energy += self.summed_to_x_div_cn[atom_type - 1][metal_type][cn_metal - 1]
                         * *nn_atom_type_count_num as f64
+                    // / cn_metal as f64
                 },
             );
         }
@@ -191,9 +195,9 @@ impl Alphas {
                     .iter()
                     .enumerate()
                     .for_each(|(metal_type_index, nn_atom_type_count_num)| {
-                        energy += self.dived_cn[nn_atom_type_counts.atom_type - 1][metal_type_index]
+                        energy += self.cn[nn_atom_type_counts.atom_type - 1][metal_type_index]
                             [nn_atom_type_counts.cn_metal - 1]
-                            // / nn_atom_type_counts.cn_metal as f64
+                            / nn_atom_type_counts.cn_metal as f64
                             * *nn_atom_type_count_num as f64
                     })
             });
