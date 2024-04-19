@@ -204,6 +204,7 @@ fn tst_rate_calculation(e_diff: f64, e_barr: f64, temperature: f64) -> f64 {
     // println!("diff {}", e_diff);
     const KB_joul: f64 = 1.380649e-23;
     const h_joul: f64 = 6.62607015e-34;
+    const KB_DIV_H: f64 = KB_joul / h_joul;
     const KB_eV: f64 = 8.6173324e-5;
     (KB_joul * temperature / h_joul) * ((-e_barr) / (KB_eV * temperature)).exp()
 }

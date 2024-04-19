@@ -286,7 +286,6 @@ fn main() {
         let input_file = input_file.clone();
         let save_folder = save_folder.clone();
         let optimization_cut_off_fraction = optimization_cut_off_fraction.clone();
-        let energy = energy.clone();
         let gridstructure_arc = Arc::clone(&gridstructure);
         let alphas_arc = Arc::clone(&alphas_arc);
         let support_indices = support_indices.clone();
@@ -305,7 +304,6 @@ fn main() {
                 heat_map,
                 rep,
                 optimization_cut_off_fraction,
-                energy,
                 alphas_arc,
                 support_indices,
                 gridstructure_arc,
