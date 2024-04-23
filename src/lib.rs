@@ -38,7 +38,7 @@ const NN_PAIR_ONLY_INTERSEC_NUMBER: usize = 4;
 const NNN_PAIR_NO_INTERSEC_NUMBER: usize = 20;
 const AMOUNT_SECTIONS: usize = 1000;
 
-const GRID_SIZE: [u32; 3] = [20, 20, 20];
+const GRID_SIZE: [u32; 3] = [30, 30, 30];
 
 const SAVE_ENTIRE_SIM: bool = true;
 
@@ -416,7 +416,7 @@ impl Simulation {
                 map[move_to as usize] += 1;
                 map[move_from as usize] += 1;
             }
-            if k_tot * 0.2 <= move_k || iiter % 10000 == 0 {
+            if k_tot * 0.2 <= move_k || k_tot < 0.001 || iiter % 10000 == 0 {
                 self.possible_moves.calc_total_k_change(self.temperature);
             }
 

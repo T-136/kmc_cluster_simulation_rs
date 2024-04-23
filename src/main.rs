@@ -10,7 +10,9 @@ use mc::GridStructure;
 use mc::Simulation;
 use std::collections::HashMap;
 use std::fs;
+use std::io::BufRead;
 use std::io::BufReader;
+// use std::io::{self, BufRead};
 use std::path::Path;
 use std::sync::Arc;
 use std::thread;
@@ -100,12 +102,12 @@ struct StartStructure {
 
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]
-#[clap(group(
-        ArgGroup::new("energy")
-            .multiple(true)
-            .required(true)
-            .args(&["e_l_cn", "e_cn", "e_l_gcn", "e_gcn"]),
-    ))]
+// #[clap(group(
+//         ArgGroup::new("energy")
+//             .multiple(true)
+//             .required(true)
+//             .args(&["e_l_cn", "e_cn", "e_l_gcn", "e_gcn", "alphas"]),
+//     ))]
 struct Args {
     #[clap(flatten)]
     start_structure: StartStructure,
@@ -121,17 +123,19 @@ struct Args {
     #[arg(short, long, default_value_t = 300.)]
     temperature: f64,
 
-    #[arg(long, allow_hyphen_values(true))]
-    e_l_cn: Option<String>,
-
-    #[arg(long, allow_hyphen_values(true))]
-    e_cn: Option<String>,
-
-    #[arg(long, allow_hyphen_values(true))]
-    e_l_gcn: Option<String>,
-
-    #[arg(long, allow_hyphen_values(true))]
-    e_gcn: Option<String>,
+    // #[arg(long, allow_hyphen_values(true))]
+    // e_l_cn: Option<String>,
+    //
+    // #[arg(long, allow_hyphen_values(true))]
+    // e_cn: Option<String>,
+    //
+    // #[arg(long, allow_hyphen_values(true))]
+    // e_l_gcn: Option<String>,
+    //
+    // #[arg(long, allow_hyphen_values(true))]
+    // e_gcn: Option<String>,
+    #[arg(long)]
+    alphas: String,
 
     #[arg(short, long, value_delimiter = '-', default_values_t = vec!(0,1))]
     repetition: Vec<usize>,
@@ -275,11 +279,16 @@ fn main() {
         surrounding_moves_file,
     );
     let gridstructure = Arc::new(gridstructure);
-    atom_names.insert("Pt".to_string(), 1);
-    atom_names.insert("Pd".to_string(), 2);
+    // atom_names.insert("Pt".to_string(), 1);
+    // atom_names.insert("Pd".to_string(), 2);
     atom_names.insert("Al".to_string(), 100);
 
-    let alphas = alpha_energy::Alphas::new(alpha_energy::energy_const);
+    // let alphas_file = "Pt_Pd.bat".to_string();
+    let alphas_file = args.alphas;
+    let alphas_arr = read_alphas(alphas_file, &mut atom_names);
+    let alphas = alpha_energy::Alphas::new(alphas_arr);
+    // let alphas = alpha_energy::Alphas::new(alpha_energy::energy_const);
+    println!("alphas: {:?}", alphas);
     let alphas_arc = Arc::new(alphas);
 
     for rep in repetition[0]..repetition[1] {
@@ -323,4 +332,70 @@ fn main() {
     //         format!("deleting folders with heigh energy not successful {err}")
     //     )
     // });
+}
+
+fn read_alphas(alphas_file: String, atom_names: &mut HashMap<String, u8>) -> [[[f64; 12]; 2]; 2] {
+    const LINE_COUNT: usize = 14;
+    // let mut x = alphas_file.split('.');
+    let fiel_name = alphas_file.split('.').next().unwrap();
+    for (i, metal) in fiel_name.split('_').enumerate() {
+        atom_names.insert(metal.to_string(), (i + 1) as u8);
+    }
+    let pairlist = fs::File::open(alphas_file).expect("Should have been able to read the file");
+
+    let lines = BufReader::new(pairlist);
+    let mut alphas: [[[f64; 12]; 2]; 2] = [[[0.; 12]; 2]; 2];
+
+    for (i, line) in lines.lines().enumerate() {
+        println!("{}", i);
+        let r = line.unwrap();
+        let num = r.parse::<f64>().unwrap();
+        println!("{}", num);
+        if i < LINE_COUNT {
+            if i >= 12 {
+                continue;
+            }
+            alphas[0][0][i] = num;
+        } else if i < LINE_COUNT * 2 {
+            if i >= LINE_COUNT * 2 - 2 {
+                continue;
+            }
+            alphas[1][1][i - LINE_COUNT * 1] = num;
+        } else if i < LINE_COUNT * 3 {
+            if i >= LINE_COUNT * 3 - 2 {
+                continue;
+            }
+            alphas[1][0][i - LINE_COUNT * 2] = num;
+        } else {
+            if i >= LINE_COUNT * 4 - 2 {
+                continue;
+            }
+            alphas[0][1][i - LINE_COUNT * 3] = num;
+        }
+    }
+    alphas
+}
+
+// fn alphas_read_one_section(line_index: usize, section: usize,  line: String, alphas: &mut [[[0.; 12]; 2]; 2]) {
+//             if line_index >= LINE_COUNT * section - 2 {
+//                 continue;
+//             }
+//             alphas[0][1][i - LINE_COUNT * (section-1)] = line.parse::<f64>().unwrap();
+//
+// }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn read_e_file() {
+        let alphas_inp = "Pt_Pd.bat".to_string();
+
+        let mut atom_names: HashMap<String, u8> = HashMap::new();
+        let res = read_alphas(alphas_inp, &mut atom_names);
+        println!("{:?}", atom_names);
+
+        println!("{:?}", res);
+    }
 }
