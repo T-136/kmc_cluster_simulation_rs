@@ -286,9 +286,13 @@ fn main() {
     // let alphas_file = "Pt_Pd.bat".to_string();
     let alphas_file = args.alphas;
     let alphas_arr = read_alphas(alphas_file, &mut atom_names);
+    println!("{:?}", alphas_arr);
     let alphas = alpha_energy::Alphas::new(alphas_arr);
     // let alphas = alpha_energy::Alphas::new(alpha_energy::energy_const);
-    println!("alphas: {:?}", alphas);
+    println!(
+        "alphas: {:?} \n sum alphas: {:?}",
+        alphas.div_by_cn, alphas.summed_to_x_div_cn
+    );
     let alphas_arc = Arc::new(alphas);
 
     for rep in repetition[0]..repetition[1] {
@@ -390,7 +394,7 @@ mod tests {
 
     #[test]
     fn read_e_file() {
-        let alphas_inp = "Pt_Pd.bat".to_string();
+        let alphas_inp = "Pt_Pd.3.bat".to_string();
 
         let mut atom_names: HashMap<String, u8> = HashMap::new();
         let res = read_alphas(alphas_inp, &mut atom_names);

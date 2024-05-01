@@ -194,7 +194,7 @@ pub fn occ_onlyocc_from_xyz(
             let dist = (x.1[0] - xsites_positions[site as usize][0]).powf(2.)
                 + (x.1[1] - xsites_positions[site as usize][1]).powf(2.)
                 + (x.1[2] - xsites_positions[site as usize][2]).powf(2.);
-            if dist < 0.15 {
+            if dist < 2.15 {
                 if x.0 == supp_metal {
                     atom_pos[site as usize].occ = 100;
                     continue;
@@ -204,6 +204,7 @@ pub fn occ_onlyocc_from_xyz(
             }
         }
     }
+    println!("onlyocc len: {}", onlyocc.len());
     if let Some(coat_atom) = coating {
         let mut all_neigbors = Vec::new();
         for atom in onlyocc.iter() {
@@ -216,5 +217,6 @@ pub fn occ_onlyocc_from_xyz(
             }
         }
     }
+    println!("onlyocc len: {}", onlyocc.len());
     onlyocc
 }

@@ -1,12 +1,16 @@
+use core::panic;
 use rand::distributions::{Distribution, Uniform};
 use rand::rngs::SmallRng;
 use rand::seq::SliceRandom;
+use rand_distr::num_traits::Float;
 use std::collections::HashMap;
+use std::usize;
 
 #[derive(Clone, Debug)]
 pub struct ListDict {
     move_to_position: HashMap<u64, usize, ahash::RandomState>,
     pub moves: Vec<Move>, // [(from, to, energy_change)]
+    pub moves_k: Vec<f64>,
     pub total_k: f64,
 }
 
@@ -16,7 +20,6 @@ pub struct Move {
     pub to: u32,
     e_diff: f64,
     e_barr: f64,
-    k: f64,
 }
 
 impl ListDict {
@@ -28,18 +31,14 @@ impl ListDict {
         ListDict {
             move_to_position: item_to_position,
             moves: Vec::with_capacity((largest_atom_position * 3) as usize),
+            moves_k: Vec::new(),
             total_k: f64::INFINITY,
         }
     }
 
     pub fn calc_total_k_change(&mut self, temp: f64) {
-        self.total_k = self
-            .iter()
-            .map(|mmove| {
-                mmove.k
-                // tst_rate_calculation(mmove.energy, temp)
-            })
-            .sum::<f64>()
+        self.total_k = simd_sum(&self.moves_k);
+        // self.total_k = self.moves_k.iter().sum::<f64>()
     }
 
     pub fn add_item(
@@ -61,8 +60,8 @@ impl ListDict {
                     to: move_to,
                     e_diff,
                     e_barr,
-                    k: k,
                 });
+                self.moves_k.push(k);
                 e.insert(self.moves.len() - 1);
                 self.total_k += k;
             }
@@ -76,16 +75,18 @@ impl ListDict {
             .remove(&(move_from as u64 + ((move_to as u64) << 32)))
         {
             let mmove = self.moves.pop().unwrap();
+            let mmove_k = self.moves_k.pop().unwrap();
             if position != self.moves.len() {
                 let old_move = std::mem::replace(&mut self.moves[position], mmove);
+                let old_k = std::mem::replace(&mut self.moves_k[position], mmove_k);
                 // self.moves[position] = mmove;
                 self.move_to_position.insert(
                     (self.moves[position].from as u64 + ((self.moves[position].to as u64) << 32)),
                     position,
                 );
-                self.total_k -= old_move.k;
+                self.total_k -= old_k;
             } else {
-                self.total_k -= mmove.k;
+                self.total_k -= mmove_k;
             }
         }
     }
@@ -113,21 +114,21 @@ impl ListDict {
             //     "old_k: {} e: {}",
             //     self.moves[*position].k, self.moves[*position].energy
             // );
-            self.total_k -= self.moves[*position].k;
-            self.moves[*position].k = new_k;
+            self.total_k -= self.moves_k[*position];
+            self.moves_k[*position] = new_k;
             self.moves[*position].e_diff = e_diff;
             self.moves[*position].e_barr = e_barr;
         }
     }
 
     pub fn choose_ramdom_move_kmc(
-        &mut self,
+        &self,
         rng_choose: &mut SmallRng,
         temp: f64,
     ) -> Option<(u32, u32, f64, f64, f64, f64)> {
         // self.calc_total_k_change(temp);
         let between = Uniform::new_inclusive(0., 1.);
-        let k_time_rng = between.sample(rng_choose) * self.total_k;
+        let mut k_time_rng = between.sample(rng_choose) * self.total_k;
         // println!(
         //     "ktot: {} krng: {}",
         //     format!("{:e}", self.total_k),
@@ -135,28 +136,33 @@ impl ListDict {
         // );
         let mut cur_k = 0_f64;
         let mut res: Option<(u32, u32, f64, f64, f64, f64)> = None;
-        for mmove in self.iter() {
-            cur_k += mmove.k;
-            if cur_k >= k_time_rng {
-                res = Some((
-                    mmove.from,
-                    mmove.to,
-                    mmove.e_diff,
-                    mmove.e_barr,
+
+        for (iter, k) in self.moves_k.iter().enumerate() {
+            cur_k += k;
+            if k_time_rng <= cur_k {
+                return Some((
+                    self.moves[iter].from,
+                    self.moves[iter].to,
+                    self.moves[iter].e_diff,
+                    self.moves[iter].e_barr,
                     self.total_k,
-                    mmove.k,
+                    *k,
                 ));
-                return res;
             }
         }
-        let calc_tot_k = self.iter().map(|mmove| mmove.k).sum::<f64>();
-        println!(
-            "clac_tot_k/tot_k: {}, # moves: {}",
-            format!("{}", calc_tot_k / self.total_k),
-            format!("{}", self.iter().count()),
-        );
-        println!("tot_k: {}", self.total_k);
-        res
+        return None;
+        // for (i, mmove) in self.iter().enumerate() {
+
+        // return res;
+        // }
+        // let calc_tot_k = self.iter().map(|mmove| mmove.k).sum::<f64>();
+        // println!(
+        //     "clac_tot_k/tot_k: {}, # moves: {}",
+        //     format!("{}", calc_tot_k / self.total_k),
+        //     format!("{}", self.iter().count()),
+        // );
+        // // println!("tot_k: {}", self.total_k);
+        // res
     }
 
     pub fn iter(&self) -> std::slice::Iter<'_, Move> {
@@ -239,3 +245,53 @@ fn tst_rate_calculation(e_diff: f64, e_barr: f64, temperature: f64) -> f64 {
 // unsafe impl Sync for ListDict {}
 // unsafe impl Send for WrapperListDict {}
 // unsafe impl Sync for WrapperListDict {}
+
+use std::convert::TryInto;
+
+const LANES: usize = 16;
+
+pub fn simd_sum(values: &[f64]) -> f64 {
+    let chunks = values.chunks_exact(LANES);
+    let remainder = chunks.remainder();
+
+    let sum = chunks.fold([0.0_f64; LANES], |mut acc, chunk| {
+        let chunk: [f64; LANES] = chunk.try_into().unwrap();
+        for i in 0..LANES {
+            acc[i] += chunk[i];
+        }
+        acc
+    });
+
+    let remainder: f64 = remainder.iter().copied().sum();
+    let reduced: f64 = sum.iter().copied().take(LANES).sum();
+    reduced + remainder
+}
+
+pub fn simd_sum_to(values: &[f64], cond: f64) -> f64 {
+    let chunks = values.chunks_exact(LANES);
+    let remainder = chunks.remainder();
+
+    let mut i = 0;
+    let mut sum = 0.;
+
+    let sum = chunks.fold([0.0_f64; LANES], |mut acc, chunk| {
+        let chunk: [f64; LANES] = chunk.try_into().unwrap();
+        for i in 0..LANES {
+            acc[i] += chunk[i];
+        }
+        acc
+    });
+
+    let remainder: f64 = remainder.iter().copied().sum();
+    let reduced: f64 = sum.iter().copied().take(LANES).sum();
+    reduced + remainder
+}
+
+// fn slow_sum(x: &[f32]) -> f32 {
+//     assert!(x.len() % 4 == 0);
+//     let mut sum: f32 = 0.;
+//     for i in (0..x.len()).step_by(4) {
+//         sum += f32x4::from_slice_unaligned(&x[i..]).sum();
+//     }
+//     sum
+// }

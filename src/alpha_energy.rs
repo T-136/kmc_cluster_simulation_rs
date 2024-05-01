@@ -116,14 +116,22 @@ impl Alphas {
         }
     }
 
-    fn sum_up_to_cn(atom_type_index: usize, in_a_type_index: usize, cn: usize) -> f64 {
-        (0..(cn))
-            // .filter(|cn_i| *cn_i != 0)
-            .map(|cn_i| {
-                // energy += get_alpha_vector(atom_type, nn_atom_type_count, cn_i)
-                energy_const[atom_type_index][in_a_type_index][cn_i] / cn as f64
-            })
-            .sum::<f64>()
+    fn sum_up_to_cn(
+        clean_and_dilluted: &[f64; 12],
+        atom_type_index: usize,
+        in_a_type_index: usize,
+        cn: usize,
+    ) -> f64 {
+        // (0..(cn))
+        //     // .filter(|cn_i| *cn_i != 0)
+        //     .map(|cn_i| {
+        //         // energy += get_alpha_vector(atom_type, nn_atom_type_count, cn_i)
+        //         clean_and_dilluted[cn_i]
+        //         // / cn as f64
+        //     })
+        //     .sum::<f64>()
+
+        clean_and_dilluted[..cn].iter().sum::<f64>()
     }
 
     //in_metal;cn-1
@@ -135,7 +143,12 @@ impl Alphas {
 
         for (nn_m_i, metal_e_list) in clean_and_dilluted.iter().enumerate() {
             for cn_index in 0..metal_e_list.len() {
-                metal[nn_m_i][cn_index] = Alphas::sum_up_to_cn(metal_i, nn_m_i, cn_index + 1);
+                metal[nn_m_i][cn_index] = Alphas::sum_up_to_cn(
+                    &clean_and_dilluted[nn_m_i],
+                    metal_i,
+                    nn_m_i,
+                    cn_index + 1,
+                );
             }
         }
 
@@ -186,7 +199,7 @@ impl Alphas {
             .for_each(|(metal_type, nn_atom_type_count_num)| {
                 energy += self.summed_to_x_div_cn[atom_type - 1][metal_type][cn_metal - 1]
                     * *nn_atom_type_count_num as f64
-                // / cn_metal as f64
+                    / cn_metal as f64
             });
         energy
     }
@@ -210,7 +223,7 @@ impl Alphas {
                 |(metal_type, nn_atom_type_count_num)| {
                     energy += self.summed_to_x_div_cn[atom_type - 1][metal_type][cn_metal - 1]
                         * *nn_atom_type_count_num as f64
-                    // / cn_metal as f64
+                        / cn_metal as f64
                 },
             );
         }
@@ -357,6 +370,10 @@ mod tests {
             summed_alphas += (alpha_pt[0][cn_i]) / 4. * 2.;
             summed_alphas += alpha_pt[1][cn_i] / 4. * 2.;
         }
+        println!(
+            "alphas {:?} \n alphas sumed: {:?}",
+            alphas.div_by_cn, alphas.summed_to_x_div_cn
+        );
         assert!(
             alphas.summed_to_x_div_cn[0][0][cn - 1] * 2.
                 + alphas.summed_to_x_div_cn[1][0][cn - 1] * 2.
