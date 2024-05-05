@@ -343,7 +343,7 @@ fn read_alphas(alphas_file: String, atom_names: &mut HashMap<String, u8>) -> [[[
     // let mut x = alphas_file.split('.');
     let fiel_name = alphas_file.split('.').next().unwrap();
     for (i, metal) in fiel_name.split('_').enumerate() {
-        atom_names.insert(metal.to_string(), (i + 1) as u8);
+        atom_names.insert(metal.to_string(), i as u8);
     }
     let pairlist = fs::File::open(alphas_file).expect("Should have been able to read the file");
 

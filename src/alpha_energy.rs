@@ -197,7 +197,7 @@ impl Alphas {
             .iter()
             .enumerate()
             .for_each(|(metal_type, nn_atom_type_count_num)| {
-                energy += self.summed_to_x_div_cn[atom_type - 1][metal_type][cn_metal - 1]
+                energy += self.summed_to_x_div_cn[atom_type][metal_type][cn_metal - 1]
                     * *nn_atom_type_count_num as f64
                     / cn_metal as f64
             });
@@ -221,7 +221,7 @@ impl Alphas {
         if cn_metal != 0 {
             nn_atom_type_count.iter().enumerate().for_each(
                 |(metal_type, nn_atom_type_count_num)| {
-                    energy += self.summed_to_x_div_cn[atom_type - 1][metal_type][cn_metal - 1]
+                    energy += self.summed_to_x_div_cn[atom_type][metal_type][cn_metal - 1]
                         * *nn_atom_type_count_num as f64
                         / cn_metal as f64
                 },
@@ -242,8 +242,8 @@ impl Alphas {
                     .iter()
                     .enumerate()
                     .for_each(|(metal_type_index, nn_atom_type_count_num)| {
-                        energy += self.div_by_cn[nn_atom_type_counts.atom_type - 1]
-                            [metal_type_index][nn_atom_type_counts.cn_metal - 1]
+                        energy += self.div_by_cn[nn_atom_type_counts.atom_type][metal_type_index]
+                            [nn_atom_type_counts.cn_metal - 1]
                             / nn_atom_type_counts.cn_metal as f64
                             * *nn_atom_type_count_num as f64
                     })
@@ -282,8 +282,7 @@ fn get_alpha_vector(
     if cn_metal == 0 {
         return 0.;
     }
-    let atom_type_index = atom_type - 1;
-    energy_const[atom_type_index][1][cn_metal] / cn_metal as f64 * nn_atom_type_count[1] as f64
+    energy_const[atom_type][1][cn_metal] / cn_metal as f64 * nn_atom_type_count[1] as f64
 }
 
 pub fn e_one_atom_tst(
@@ -303,7 +302,7 @@ pub fn e_one_atom_tst(
                 // .filter(|cn_i| *cn_i != 0)
                 .map(|cn_i| {
                     // energy += get_alpha_vector(atom_type, nn_atom_type_count, cn_i)
-                    energy_const[atom_type - 1][metal_type][cn_i] / cn_metal_range.1 as f64
+                    energy_const[atom_type][metal_type][cn_i] / cn_metal_range.1 as f64
                         * *nn_atom_type_count_num as f64
                 })
                 .sum::<f64>();
@@ -333,7 +332,7 @@ where
                 // .filter(|cn_i| *cn_i != 0)
                 .map(|cn_i| {
                     // energy += get_alpha_vector(atom_type, nn_atom_type_count, cn_i)
-                    energy_const[atom_type - 1][metal_type][cn_i] / cn_metal_range.1 as f64
+                    energy_const[atom_type][metal_type][cn_i] / cn_metal_range.1 as f64
                         * nn_atom_type_count_num as f64
                 })
                 .sum::<f64>();
@@ -341,7 +340,7 @@ where
     for nn_atom_type_counts in nn_nn_atom_type_count {
         assert!(nn_atom_type_counts.1.iter().sum::<u8>() as usize == nn_atom_type_counts.0);
         for (metal_type, nn_atom_type_count_num) in nn_atom_type_counts.1.iter().enumerate() {
-            energy += energy_const[nn_atom_type_counts.2 - 1][metal_type][nn_atom_type_counts.0 - 1]
+            energy += energy_const[nn_atom_type_counts.2][metal_type][nn_atom_type_counts.0 - 1]
                 / nn_atom_type_counts.0 as f64
                 * *nn_atom_type_count_num as f64
         }

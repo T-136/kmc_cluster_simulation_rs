@@ -160,7 +160,7 @@ impl Simulation {
             for o1 in gridstructure.nn[&(o as u32)].iter() {
                 if atom_pos[*o1 as usize].occ != 255 && atom_pos[*o1 as usize].occ != 100 {
                     // cn.entry(o).and_modify(|x| *x += 1).or_insert(1);
-                    let atom_type = atom_pos[*o1 as usize].occ as usize - 1;
+                    let atom_type = atom_pos[*o1 as usize].occ as usize;
                     atom_pos[o].nn_atom_type_count[atom_type] += 1;
                     neighbors += 1;
                 }
@@ -386,7 +386,7 @@ impl Simulation {
         // print!("poss moves: {:?}", self.possible_moves.moves);
         print!("poss addremove: {:?}", self.add_or_remove.atoms);
 
-        let redox_time = 0.000005;
+        let redox_time = 500.;
         let mut redox_update_time = 0.;
 
         for iiter in 0..self.niter {
@@ -701,7 +701,7 @@ impl Simulation {
         }
         // println!("possible moves: {:?}", self.possible_moves.moves);
         // for o in self.gridstructure.nn[&move_from] {
-        let atom_type = self.atom_pos[move_to as usize].occ as usize - 1;
+        let atom_type = self.atom_pos[move_to as usize].occ as usize;
         for o in from_change {
             if (SAVE_ENTIRE_SIM || is_recording_sections)
                 && self.atom_pos[o as usize].occ != 255
@@ -904,7 +904,6 @@ impl Simulation {
     }
 
     fn calc_energy_change_by_move(&self, move_from: u32, move_to: u32, atom_typ: u8) -> (f64, f64) {
-        let atom_typ_index = atom_typ - 1;
         // println!("{}", atom_typ_index);
         // println!("{:?}", self.atom_pos.neigboring_atom_type_count);
         //
@@ -915,12 +914,12 @@ impl Simulation {
         let mut cn_tst = 0;
         let mut from_nn_atom_type_no_tst = self.atom_pos[move_from as usize].nn_atom_type_count;
         let mut to_nn_atom_type_count = self.atom_pos[move_to as usize].nn_atom_type_count;
-        to_nn_atom_type_count[atom_typ_index as usize] -= 1;
+        to_nn_atom_type_count[atom_typ as usize] -= 1;
 
         // inter_nn.iter().for_each(|x| {
         for x in inter_nn {
             if self.atom_pos[x as usize].occ != 255 && x != move_from {
-                nn_atom_type_count_tst[self.atom_pos[x as usize].occ as usize - 1] += 1;
+                nn_atom_type_count_tst[self.atom_pos[x as usize].occ as usize] += 1;
                 // from_nn_atom_type_no_tst[self.atom_pos[x as usize].occ as usize - 1] -= 1;
                 // to_nn_atom_type_count[self.atom_pos[x as usize].occ as usize - 1] -= 1;
                 cn_tst += 1;
@@ -964,11 +963,12 @@ impl Simulation {
                             nn_atom_type_count_num_list: self.atom_pos[*x as usize]
                                 .nn_atom_type_count,
                             atom_type: self.atom_pos[*x as usize].occ as usize,
-                        }, //     (
-                           //     self.atom_pos[*x as usize].cn_metal,
-                           //     self.atom_pos[*x as usize].nn_atom_type_count,
-                           //     self.atom_pos[*x as usize].occ as usize,
-                           // )
+                        },
+                        //     (
+                        //     self.atom_pos[*x as usize].cn_metal,
+                        //     self.atom_pos[*x as usize].nn_atom_type_count,
+                        //     self.atom_pos[*x as usize].occ as usize,
+                        // )
                     )
                 } else {
                     None
@@ -987,7 +987,7 @@ impl Simulation {
                     let mut cn_metal_future = self.atom_pos[*x as usize].cn_metal;
                     let mut nn_atom_type_count_future =
                         self.atom_pos[*x as usize].nn_atom_type_count;
-                    nn_atom_type_count_future[atom_typ_index as usize] += 1;
+                    nn_atom_type_count_future[atom_typ as usize] += 1;
                     cn_metal_future += 1;
 
                     Some(

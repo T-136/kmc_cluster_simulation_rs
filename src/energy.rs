@@ -32,7 +32,7 @@ pub fn energy_diff_cn<I, O>(
     cn_to_list: O,
     move_from_cn: usize,
     move_to_cn: usize,
-    mut atom_typ_index: usize,
+    atom_typ: usize,
     is_from_at_support: u8,
     is_to_at_support: u8,
     support_e: i64,
@@ -43,22 +43,19 @@ where
 {
     // let energy = energy[atom_typ_index];
     let mut energy_diff_1000 = 0;
-    for (cn_from, mut atom_typ_index) in cn_from_list {
-        atom_typ_index -= 1;
-        energy_diff_1000 -= energy[atom_typ_index as usize][cn_from];
-        energy_diff_1000 += energy[atom_typ_index as usize][cn_from - 1];
+    for (cn_from, atom_typ) in cn_from_list {
+        energy_diff_1000 -= energy[atom_typ as usize][cn_from];
+        energy_diff_1000 += energy[atom_typ as usize][cn_from - 1];
     }
-    for (cn_to, mut atom_typ_index) in cn_to_list {
-        atom_typ_index -= 1;
-        energy_diff_1000 -= energy[atom_typ_index as usize][cn_to];
-        energy_diff_1000 += energy[atom_typ_index as usize][cn_to + 1];
+    for (cn_to, atom_typ) in cn_to_list {
+        energy_diff_1000 -= energy[atom_typ as usize][cn_to];
+        energy_diff_1000 += energy[atom_typ as usize][cn_to + 1];
     }
-    atom_typ_index -= 1;
-    energy_diff_1000 -= energy[atom_typ_index][move_from_cn];
+    energy_diff_1000 -= energy[atom_typ][move_from_cn];
     if is_from_at_support == 1 {
         energy_diff_1000 -= support_e;
     }
-    energy_diff_1000 += energy[atom_typ_index][move_to_cn - 1];
+    energy_diff_1000 += energy[atom_typ][move_to_cn - 1];
     if is_to_at_support == 1 {
         energy_diff_1000 += support_e;
     }
@@ -105,24 +102,21 @@ pub fn energy_diff_l_cn(
     cn_to: usize,
     neigbors_of_from: &[u8; super::NUM_ATOM_TYPES],
     neigbors_of_to: &[u8; super::NUM_ATOM_TYPES],
-    mut atom_typ_index_main: usize,
+    atom_typ_main: usize,
     is_from_at_support: u8,
     is_to_at_support: u8,
     support_e: i64,
 ) -> i64 {
-    atom_typ_index_main -= 1;
     let mut energy_change = 0;
-    energy_change -=
-        (cn_from as i64) * energy[atom_typ_index_main][0] + energy[atom_typ_index_main][1];
-    energy_change +=
-        (cn_to as i64 - 1) * energy[atom_typ_index_main][0] + energy[atom_typ_index_main][1];
+    energy_change -= (cn_from as i64) * energy[atom_typ_main][0] + energy[atom_typ_main][1];
+    energy_change += (cn_to as i64 - 1) * energy[atom_typ_main][0] + energy[atom_typ_main][1];
     for (atom_typ_index, neigh) in neigbors_of_from.iter().enumerate() {
         // atom_typ_index -= 1;
         energy_change -= (*neigh as i64) * energy[atom_typ_index][0];
     }
     for (atom_typ_index, neigh) in neigbors_of_to.iter().enumerate() {
         // atom_typ_index -= 1;
-        if atom_typ_index == atom_typ_index_main {
+        if atom_typ_index == atom_typ_main {
             energy_change += (*neigh as i64 - 1) * energy[atom_typ_index][0];
         } else {
             energy_change += (*neigh as i64) * energy[atom_typ_index][0];

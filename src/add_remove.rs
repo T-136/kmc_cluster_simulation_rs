@@ -10,7 +10,7 @@ pub enum AddRemoveHow {
 impl crate::Simulation {
     pub fn change_item(&mut self, pos: u32, how: &AddRemoveHow, is_recording_sections: bool) {
         match how {
-            AddRemoveHow::Remove(remove_atom_index) => {
+            AddRemoveHow::Remove(remove_atom_type) => {
                 self.atom_pos[pos as usize].occ = 255;
                 self.onlyocc.remove(&pos);
 
@@ -34,7 +34,7 @@ impl crate::Simulation {
                         }
                     }
                     self.atom_pos[o as usize].cn_metal -= 1;
-                    self.atom_pos[o as usize].nn_atom_type_count[*remove_atom_index as usize] -= 1;
+                    self.atom_pos[o as usize].nn_atom_type_count[*remove_atom_type as usize] -= 1;
                 }
 
                 if super::SAVE_ENTIRE_SIM || is_recording_sections {
@@ -46,8 +46,8 @@ impl crate::Simulation {
                     // self.cn_dict[self.atom_pos[move_from as usize].cn_metal] -= 1;
                 }
             }
-            AddRemoveHow::RemoveAndAdd(remove_atom_index, add_atom_index) => {
-                self.atom_pos[pos as usize].occ = *add_atom_index + 1;
+            AddRemoveHow::RemoveAndAdd(remove_atom_type, add_atom_type) => {
+                self.atom_pos[pos as usize].occ = *add_atom_type;
 
                 for o in self.gridstructure.nn[&pos] {
                     if (super::SAVE_ENTIRE_SIM || is_recording_sections)
@@ -69,8 +69,8 @@ impl crate::Simulation {
                         }
                     }
                     // self.atom_pos[o as usize].cn_metal -= 1;
-                    self.atom_pos[o as usize].nn_atom_type_count[*remove_atom_index as usize] -= 1;
-                    self.atom_pos[o as usize].nn_atom_type_count[*add_atom_index as usize] += 1;
+                    self.atom_pos[o as usize].nn_atom_type_count[*remove_atom_type as usize] -= 1;
+                    self.atom_pos[o as usize].nn_atom_type_count[*add_atom_type as usize] += 1;
                 }
             }
         }
@@ -84,7 +84,7 @@ impl crate::Simulation {
         let mut pos_nn_atom_type_no_tst = self.atom_pos[pos as usize].nn_atom_type_count;
         let mut energy = 0.;
         match how {
-            AddRemoveHow::Remove(remove_atom_index) => {
+            AddRemoveHow::Remove(remove_atom_type) => {
                 energy -= self.alphas.e_one_atom(
                     self.atom_pos[pos as usize].cn_metal,
                     // self.atom_pos[move_from as usize].nn_atom_type_count,
@@ -101,12 +101,12 @@ impl crate::Simulation {
                             None
                         }
                     }),
-                    *remove_atom_index as usize + 1,
+                    *remove_atom_type as usize,
                     0,
                     0,
                 );
             }
-            AddRemoveHow::RemoveAndAdd(add_atom_index, remove_atom_index) => {
+            AddRemoveHow::RemoveAndAdd(add_atom_type, remove_atom_type) => {
                 energy -= self.alphas.e_one_atom(
                     self.atom_pos[pos as usize].cn_metal,
                     // self.atom_pos[move_from as usize].nn_atom_type_count,
@@ -123,7 +123,7 @@ impl crate::Simulation {
                             None
                         }
                     }),
-                    *remove_atom_index as usize + 1,
+                    *remove_atom_type as usize,
                     0,
                     0,
                 );
@@ -143,7 +143,7 @@ impl crate::Simulation {
                             None
                         }
                     }),
-                    *add_atom_index as usize + 1,
+                    *add_atom_type as usize,
                     0,
                     0,
                 );

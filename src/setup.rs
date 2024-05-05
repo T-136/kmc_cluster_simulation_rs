@@ -189,6 +189,7 @@ pub fn occ_onlyocc_from_xyz(
     let mut onlyocc: HashSet<u32, FnvBuildHasher> =
         fnv::FnvHashSet::with_capacity_and_hasher(xyz.len(), Default::default());
 
+    println!("atom_names: {:?}", atom_names);
     for x in xyz.iter() {
         for site in 0..atom_pos.len() {
             let dist = (x.1[0] - xsites_positions[site as usize][0]).powf(2.)

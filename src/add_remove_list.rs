@@ -45,9 +45,9 @@ impl AddOrRemove {
         how: &add_remove::AddRemoveHow,
     ) {
         match how {
-            add_remove::AddRemoveHow::Remove(remove_atom_type_index)
-            | add_remove::AddRemoveHow::RemoveAndAdd(remove_atom_type_index, _) => {
-                if (atom_type - 1) == *remove_atom_type_index {
+            add_remove::AddRemoveHow::Remove(remove_atom_type)
+            | add_remove::AddRemoveHow::RemoveAndAdd(remove_atom_type, _) => {
+                if atom_type == *remove_atom_type {
                     match self.atom_to_position.entry(pos) {
                         std::collections::hash_map::Entry::Vacant(e) => {
                             self.atoms.push(Removable {
