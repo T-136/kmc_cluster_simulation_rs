@@ -24,7 +24,7 @@ fn create_support(
     }
     let mut second_layer_fixpoint = 0;
     for neighbor in nn[&iclose] {
-        if atom_pos[neighbor as usize].occ == 0 {
+        if atom_pos[neighbor as usize].occ == 255 {
             second_layer_fixpoint = neighbor;
         }
     }
@@ -116,11 +116,11 @@ pub fn create_input_cluster(
         support_indices.map(|sup| create_support(atom_pos, xsites_positions, sup, nn, iclose));
 
     // occ.entry(&iclose).and_modify(1) = 1;
-    if atom_pos[iclose as usize].occ == 0 {
+    if atom_pos[iclose as usize].occ == 255 {
         onlyocc.insert(iclose);
     } else {
         for neighbor in nn[&iclose] {
-            if atom_pos[neighbor as usize].occ == 0 {
+            if atom_pos[neighbor as usize].occ == 255 {
                 onlyocc.insert(neighbor);
                 break;
             }
@@ -136,7 +136,7 @@ pub fn create_input_cluster(
             for j in &nn[site] {
                 if !onlyocc_temp_storag.contains(&j)
                     && !onlyocc.contains(&j)
-                    && atom_pos[*j as usize].occ == 0
+                    && atom_pos[*j as usize].occ == 255
                 {
                     onlyocc_temp_storag.insert(*j);
                     // onlyocc.insert(j);
@@ -166,7 +166,7 @@ pub fn create_input_cluster(
             all_neigbors.extend_from_slice(&nn[atom]);
         }
         for neighbor in all_neigbors {
-            if atom_pos[neighbor as usize].occ == 0 {
+            if atom_pos[neighbor as usize].occ == 255 {
                 atom_pos[neighbor as usize].occ = atom_names[&coat_atom];
                 onlyocc.insert(neighbor);
             }
@@ -211,7 +211,7 @@ pub fn occ_onlyocc_from_xyz(
             all_neigbors.extend_from_slice(&nn[atom]);
         }
         for neighbor in all_neigbors {
-            if atom_pos[neighbor as usize].occ == 0 {
+            if atom_pos[neighbor as usize].occ == 255 {
                 atom_pos[neighbor as usize].occ = atom_names[&coat_atom];
                 onlyocc.insert(neighbor);
             }

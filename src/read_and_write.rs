@@ -35,7 +35,7 @@ pub fn write_occ_as_xyz(
     frame.set_cell(&UnitCell::new(unit_cell.clone()));
 
     for (i, atom) in atom_pos.iter().enumerate() {
-        if atom.occ == 0 {
+        if atom.occ == 255 {
             continue;
         }
         frame.add_atom(
