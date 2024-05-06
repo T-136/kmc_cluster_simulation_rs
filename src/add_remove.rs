@@ -106,7 +106,7 @@ impl crate::Simulation {
                     0,
                 );
             }
-            AddRemoveHow::RemoveAndAdd(add_atom_type, remove_atom_type) => {
+            AddRemoveHow::RemoveAndAdd(remove_atom_type, add_atom_type) => {
                 energy -= self.alphas.e_one_atom(
                     self.atom_pos[pos as usize].cn_metal,
                     // self.atom_pos[move_from as usize].nn_atom_type_count,
@@ -242,8 +242,11 @@ impl crate::Simulation {
                 // self.add_or_remove
                 //     .add_item(move_to, self.atom_pos[move_to as usize].cn_metal as u8);
                 for x in self.gridstructure.nn[&pos] {
-                    self.add_or_remove
-                        .cond_update_cn(x, self.atom_pos[x as usize].cn_metal as u8);
+                    self.add_or_remove.cond_update_cn(
+                        x,
+                        self.atom_pos[x as usize].cn_metal as u8,
+                        self.temperature,
+                    );
                 }
             }
             AddRemoveHow::RemoveAndAdd(_, _) => {

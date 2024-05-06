@@ -12,8 +12,8 @@ use std::collections::HashMap;
 use std::fs;
 use std::io::BufRead;
 use std::io::BufReader;
-// use std::io::{self, BufRead};
 use std::path::Path;
+// use std::io::{self, BufRead};
 use std::sync::Arc;
 use std::thread;
 use std::usize;
@@ -340,9 +340,12 @@ fn main() {
 
 fn read_alphas(alphas_file: String, atom_names: &mut HashMap<String, u8>) -> [[[f64; 12]; 2]; 2] {
     const LINE_COUNT: usize = 14;
+
+    let path = Path::new(&alphas_file);
+    let file_name = path.file_name().unwrap();
     // let mut x = alphas_file.split('.');
-    let fiel_name = alphas_file.split('.').next().unwrap();
-    for (i, metal) in fiel_name.split('_').enumerate() {
+    let atom_names_string = file_name.to_str().unwrap().split('.').next().unwrap();
+    for (i, metal) in atom_names_string.split('_').enumerate() {
         atom_names.insert(metal.to_string(), i as u8);
     }
     let pairlist = fs::File::open(alphas_file).expect("Should have been able to read the file");

@@ -44,6 +44,7 @@ const GRID_SIZE: [u32; 3] = [30, 30, 30];
 
 const SAVE_ENTIRE_SIM: bool = true;
 
+// const how: add_remove::AddRemoveHow = add_remove::AddRemoveHow::RemoveAndAdd(1, 0);
 const how: add_remove::AddRemoveHow = add_remove::AddRemoveHow::Remove(1);
 
 #[derive(Clone, Default)]
@@ -352,8 +353,13 @@ impl Simulation {
 
         for (i, o) in self.atom_pos.iter().enumerate() {
             if o.occ != 255 && o.occ != 100 {
-                self.add_or_remove
-                    .cond_add_item(i as u32, o.cn_metal as u8, o.occ, &how);
+                self.add_or_remove.cond_add_item(
+                    i as u32,
+                    o.cn_metal as u8,
+                    o.occ,
+                    self.temperature,
+                    &how,
+                );
                 for u in &self.gridstructure.nn[&(i as u32)] {
                     if self.atom_pos[*u as usize].occ == 255 {
                         // >1 so that atoms cant leave the cluster
@@ -386,7 +392,7 @@ impl Simulation {
         // print!("poss moves: {:?}", self.possible_moves.moves);
         print!("poss addremove: {:?}", self.add_or_remove.atoms);
 
-        let redox_time = 500.;
+        let redox_time = 0.05;
         let mut redox_update_time = 0.;
 
         for iiter in 0..self.niter {
@@ -421,11 +427,15 @@ impl Simulation {
             };
             self.cond_snap_and_heat_map(&iiter);
 
-            if redox_update_time >= redox_time {
+            let between = Uniform::new_inclusive(0., 1.);
+            let mut k_times_rng = between.sample(&mut rng_choose)
+                * (self.possible_moves.total_k + self.add_or_remove.total_inv_cn as f64);
+
+            if k_times_rng <= self.add_or_remove.total_k {
                 println!("depositing ");
                 redox_update_time = 0.;
 
-                let item = self
+                let (item, k, k_tot) = self
                     .add_or_remove
                     .choose_ramdom_atom_to_remove(&mut rng_choose)
                     .expect("wtf no add_or_remove");
@@ -434,6 +444,10 @@ impl Simulation {
                 self.redox_update_total_k(item);
                 self.redox_update_possibel_moves(item, &how, self.temperature);
                 self.redox_update_add_remove(item, &how);
+
+                if k_tot * 0.2 <= k || k_tot < 0.001 || iiter % 10000 == 0 {
+                    self.add_or_remove.calc_total_cn_change();
+                }
             } else {
                 let (move_from, move_to, e_diff, e_barr, k_tot, move_k) = self
                     .possible_moves
@@ -1132,15 +1146,22 @@ impl Simulation {
             move_to,
             self.atom_pos[move_to as usize].cn_metal as u8,
             self.atom_pos[move_to as usize].occ as u8,
+            self.temperature,
             &how,
         );
         for x in from_change {
-            self.add_or_remove
-                .cond_update_cn(x, self.atom_pos[x as usize].cn_metal as u8);
+            self.add_or_remove.cond_update_cn(
+                x,
+                self.atom_pos[x as usize].cn_metal as u8,
+                self.temperature,
+            );
         }
         for x in to_change {
-            self.add_or_remove
-                .cond_update_cn(x, self.atom_pos[x as usize].cn_metal as u8);
+            self.add_or_remove.cond_update_cn(
+                x,
+                self.atom_pos[x as usize].cn_metal as u8,
+                self.temperature,
+            );
         }
     }
 
