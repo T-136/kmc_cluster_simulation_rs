@@ -7,6 +7,8 @@ use rand;
 use rand::distributions::{Distribution, Uniform};
 use rand::prelude::*;
 use rand::rngs::SmallRng;
+use rand_distr::num_traits::float::FloatCore;
+use rand_distr::num_traits::Float;
 use rayon::prelude::*;
 use std::collections::hash_map::Entry;
 use std::collections::{BTreeMap, HashMap, HashSet};
@@ -16,6 +18,7 @@ use std::io::BufReader;
 use std::sync::Arc;
 use std::{cmp, eprint, fs, println, usize};
 
+mod add_atom;
 mod add_remove;
 mod add_remove_list;
 pub mod alpha_energy;
@@ -428,10 +431,12 @@ impl Simulation {
             self.cond_snap_and_heat_map(&iiter);
 
             let between = Uniform::new_inclusive(0., 1.);
-            let mut k_times_rng = between.sample(&mut rng_choose)
-                * (self.possible_moves.total_k + self.add_or_remove.total_inv_cn as f64);
+            let mut k_times_rng =
+                between.sample(&mut rng_choose) * self.possible_moves._len() as f64 * 20000.;
+            // *(self.possible_moves.total_k + self.add_or_remove.total_k as f64);
 
-            if k_times_rng <= self.add_or_remove.total_k {
+            // if k_times_rng <= self.add_or_remove.total_k {
+            if false {
                 println!("depositing ");
                 redox_update_time = 0.;
 
@@ -439,7 +444,6 @@ impl Simulation {
                     .add_or_remove
                     .choose_ramdom_atom_to_remove(&mut rng_choose)
                     .expect("wtf no add_or_remove");
-
                 self.change_item(item, &how, is_recording_sections);
                 self.redox_update_total_k(item);
                 self.redox_update_possibel_moves(item, &how, self.temperature);
@@ -448,6 +452,15 @@ impl Simulation {
                 if k_tot * 0.2 <= k || k_tot < 0.001 || iiter % 10000 == 0 {
                     self.add_or_remove.calc_total_cn_change();
                 }
+            } else if k_times_rng <= self.possible_moves._len() as f64 {
+                const add_atom_type: u8 = 0;
+                let move_to = self.possible_moves.moves[k_times_rng.floor() as usize].to;
+
+                println!("adding atom");
+                self.add_atom(move_to, is_recording_sections, add_atom_type);
+                self.add_atom_update_total_k(move_to, add_atom_type);
+                self.add_atom_update_possible_moves(move_to);
+                self.possible_moves.calc_total_k_change(self.temperature);
             } else {
                 let (move_from, move_to, e_diff, e_barr, k_tot, move_k) = self
                     .possible_moves
@@ -943,23 +956,6 @@ impl Simulation {
         let tst_e = self.alphas.e_one_atom_tst(
             cn_tst,
             nn_atom_type_count_tst,
-            // inter_nn.iter().filter_map(|x| {
-            //     if self.atom_pos[*x as usize].occ != 0 {
-            //         let mut cn_metal_future = self.atom_pos[*x as usize].cn_metal;
-            //         let mut nn_atom_type_count_future =
-            //             self.atom_pos[*x as usize].nn_atom_type_count;
-            //         nn_atom_type_count_future[atom_typ_index as usize] += 1;
-            //         cn_metal_future += 1;
-            //
-            //         Some((
-            //             cn_metal_future,
-            //             nn_atom_type_count_future,
-            //             self.atom_pos[*x as usize].occ as usize,
-            //         ))
-            //     } else {
-            //         None
-            //     }
-            // }),
             self.atom_pos[move_from as usize].occ as usize,
             0,
             0,
