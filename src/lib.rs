@@ -1,3 +1,4 @@
+use add_remove::AddRemoveHow;
 use anyhow;
 use chemfiles::{Atom, Frame, Trajectory, UnitCell};
 use core::panic;
@@ -18,7 +19,7 @@ use std::io::BufReader;
 use std::sync::Arc;
 use std::{cmp, eprint, fs, println, usize};
 
-mod add_atom;
+// mod add_atom;
 mod add_remove;
 mod add_remove_list;
 pub mod alpha_energy;
@@ -48,7 +49,8 @@ const GRID_SIZE: [u32; 3] = [30, 30, 30];
 const SAVE_ENTIRE_SIM: bool = true;
 
 // const how: add_remove::AddRemoveHow = add_remove::AddRemoveHow::RemoveAndAdd(1, 0);
-const how: add_remove::AddRemoveHow = add_remove::AddRemoveHow::Remove(1);
+// const how: add_remove::AddRemoveHow = add_remove::AddRemoveHow::Remove(1);
+const how: add_remove::AddRemoveHow = add_remove::AddRemoveHow::Add(0);
 
 #[derive(Clone, Default)]
 pub struct AtomPosition {
@@ -355,14 +357,14 @@ impl Simulation {
         }
 
         for (i, o) in self.atom_pos.iter().enumerate() {
+            self.add_or_remove.cond_add_item(
+                i as u32,
+                o.cn_metal as u8,
+                o.occ,
+                self.temperature,
+                &how,
+            );
             if o.occ != 255 && o.occ != 100 {
-                self.add_or_remove.cond_add_item(
-                    i as u32,
-                    o.cn_metal as u8,
-                    o.occ,
-                    self.temperature,
-                    &how,
-                );
                 for u in &self.gridstructure.nn[&(i as u32)] {
                     if self.atom_pos[*u as usize].occ == 255 {
                         // >1 so that atoms cant leave the cluster
@@ -393,7 +395,7 @@ impl Simulation {
         println!("niter: {}", self.niter);
 
         // print!("poss moves: {:?}", self.possible_moves.moves);
-        print!("poss addremove: {:?}", self.add_or_remove.atoms);
+        println!("poss addremove: {:?}", self.add_or_remove.atoms);
 
         let redox_time = 0.05;
         let mut redox_update_time = 0.;
@@ -405,7 +407,17 @@ impl Simulation {
                     iiter,
                     (iiter as f64 / self.niter as f64 * 100.)
                 );
-                println!("possible_moves len {}", self.possible_moves.moves.len())
+                println!(
+                    "possible_moves len {} k {}",
+                    self.possible_moves.moves.len(),
+                    self.possible_moves.total_k
+                );
+                println!(
+                    "possible_moves len {} k {}",
+                    self.add_or_remove.atoms.len(),
+                    self.add_or_remove.total_k
+                );
+                // println!("poss addremove: {:?}", self.add_or_remove.atoms);
             }
             let is_recording_sections = iiter * self.optimization_cut_off_fraction[1]
                 >= self.niter * self.optimization_cut_off_fraction[0];
@@ -431,13 +443,22 @@ impl Simulation {
             self.cond_snap_and_heat_map(&iiter);
 
             let between = Uniform::new_inclusive(0., 1.);
-            let mut k_times_rng =
-                between.sample(&mut rng_choose) * self.possible_moves._len() as f64 * 20000.;
-            // *(self.possible_moves.total_k + self.add_or_remove.total_k as f64);
+            let mut k_times_rng = between.sample(&mut rng_choose)
+                // * self.possible_moves._len() as f64
+                * (self.possible_moves.total_k + self.add_or_remove.total_k as f64);
 
-            // if k_times_rng <= self.add_or_remove.total_k {
-            if false {
-                println!("depositing ");
+            // println!(
+            //     "total cn: {}, ",
+            //     self.atom_pos
+            //         .iter()
+            //         .filter(|x| x.occ != 255)
+            //         .map(|x| x.cn_metal)
+            //         .sum::<usize>()
+            // );
+
+            if k_times_rng <= self.add_or_remove.total_k {
+                // if false {
+                // println!("depositing ");
                 redox_update_time = 0.;
 
                 let (item, k, k_tot) = self
@@ -452,15 +473,15 @@ impl Simulation {
                 if k_tot * 0.2 <= k || k_tot < 0.001 || iiter % 10000 == 0 {
                     self.add_or_remove.calc_total_cn_change();
                 }
-            } else if k_times_rng <= self.possible_moves._len() as f64 {
-                const add_atom_type: u8 = 0;
-                let move_to = self.possible_moves.moves[k_times_rng.floor() as usize].to;
-
-                println!("adding atom");
-                self.add_atom(move_to, is_recording_sections, add_atom_type);
-                self.add_atom_update_total_k(move_to, add_atom_type);
-                self.add_atom_update_possible_moves(move_to);
-                self.possible_moves.calc_total_k_change(self.temperature);
+            // } else if false {
+            //     const add_atom_type: u8 = 0;
+            //     let move_to = self.possible_moves.moves[k_times_rng.floor() as usize].to;
+            //
+            //     println!("adding atom");
+            //     self.add_atom(move_to, is_recording_sections, add_atom_type);
+            //     self.add_atom_update_total_k(move_to, add_atom_type);
+            //     self.add_atom_update_possible_moves(move_to);
+            //     self.possible_moves.calc_total_k_change(self.temperature);
             } else {
                 let (move_from, move_to, e_diff, e_barr, k_tot, move_k) = self
                     .possible_moves
@@ -475,7 +496,7 @@ impl Simulation {
                 self.perform_move(move_from, move_to, e_diff, is_recording_sections);
                 self.update_total_k(move_from, move_to);
                 self.update_possible_moves(move_from, move_to);
-                self.update_add_remove(move_from, move_to);
+                self.update_add_remove(move_from, move_to, &how);
                 if let Some(map) = &mut self.heat_map {
                     map[move_to as usize] += 1;
                     map[move_from as usize] += 1;
@@ -1134,30 +1155,59 @@ impl Simulation {
         }
     }
 
-    fn update_add_remove(&mut self, move_from: u32, move_to: u32) {
+    fn update_add_remove(&mut self, move_from: u32, move_to: u32, how2: &AddRemoveHow) {
         let (from_change, to_change, inter) =
             no_int_nn_from_move(move_from, move_to, &self.gridstructure.nn_pair_no_intersec);
-        self.add_or_remove.remove_item(move_from);
-        self.add_or_remove.cond_add_item(
-            move_to,
-            self.atom_pos[move_to as usize].cn_metal as u8,
-            self.atom_pos[move_to as usize].occ as u8,
-            self.temperature,
-            &how,
-        );
-        for x in from_change {
-            self.add_or_remove.cond_update_cn(
-                x,
-                self.atom_pos[x as usize].cn_metal as u8,
-                self.temperature,
-            );
-        }
-        for x in to_change {
-            self.add_or_remove.cond_update_cn(
-                x,
-                self.atom_pos[x as usize].cn_metal as u8,
-                self.temperature,
-            );
+        match how2 {
+            AddRemoveHow::Remove(_) | AddRemoveHow::Exchange(_, _) => {
+                self.add_or_remove.remove_item(move_from);
+                self.add_or_remove.cond_add_item(
+                    move_to,
+                    self.atom_pos[move_to as usize].cn_metal as u8,
+                    self.atom_pos[move_to as usize].occ as u8,
+                    self.temperature,
+                    &how2,
+                );
+                for x in from_change {
+                    self.add_or_remove.cond_update_cn(
+                        x,
+                        self.atom_pos[x as usize].cn_metal as u8,
+                        self.temperature,
+                    );
+                }
+                for x in to_change {
+                    self.add_or_remove.cond_update_cn(
+                        x,
+                        self.atom_pos[x as usize].cn_metal as u8,
+                        self.temperature,
+                    );
+                }
+            }
+            AddRemoveHow::Add(_) => {
+                self.add_or_remove.remove_item(move_to);
+                self.add_or_remove.cond_add_item(
+                    move_from,
+                    self.atom_pos[move_from as usize].cn_metal as u8,
+                    self.atom_pos[move_from as usize].occ as u8,
+                    self.temperature,
+                    &how2,
+                );
+                for x in from_change {
+                    self.add_or_remove.cond_update_cn(
+                        x,
+                        self.atom_pos[x as usize].cn_metal as u8,
+                        self.temperature,
+                    );
+                }
+                for x in to_change {
+                    self.add_or_remove.cond_update_cn(
+                        x,
+                        self.atom_pos[x as usize].cn_metal as u8,
+                        self.temperature,
+                    );
+                }
+            }
+            AddRemoveHow::RemoveAndAdd(_, _) => todo!(),
         }
     }
 

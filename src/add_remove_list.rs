@@ -4,23 +4,25 @@ use rand::rngs::SmallRng;
 use std::collections::HashMap;
 
 use crate::add_remove;
+use crate::add_remove::AddRemoveHow;
 
 const CN_FOR_INV: u8 = 12;
 // const E_RATIO: f64 = 0.20; 400K
-const E_RATIO_BARR: f64 = 0.10;
+const E_RATIO_BARR: f64 = 0.1300000;
 
 #[derive(Clone, Debug)]
 pub struct AddOrRemove {
     atom_to_position: HashMap<u32, usize, ahash::RandomState>,
-    pub atoms: Vec<Removable>, // [(from, to, energy_change)]
+    pub atoms: Vec<AtomPosChange>, // [(from, to, energy_change)]
     pub total_k: f64,
     // potential: f64,
 }
 
 #[derive(Clone, Debug)]
-pub struct Removable {
+pub struct AtomPosChange {
     pos: u32,
     k: f64,
+    how: AddRemoveHow,
 }
 
 impl AddOrRemove {
@@ -52,12 +54,16 @@ impl AddOrRemove {
         }
         match how {
             add_remove::AddRemoveHow::Remove(remove_atom_type)
-            | add_remove::AddRemoveHow::RemoveAndAdd(remove_atom_type, _) => {
+            | add_remove::AddRemoveHow::Exchange(remove_atom_type, _) => {
                 if atom_type == *remove_atom_type {
                     match self.atom_to_position.entry(pos) {
                         std::collections::hash_map::Entry::Vacant(e) => {
                             let k = tst_rate_calculation(cn as f64 * E_RATIO_BARR, temperature);
-                            self.atoms.push(Removable { pos, k });
+                            self.atoms.push(AtomPosChange {
+                                pos,
+                                k,
+                                how: how.clone(),
+                            });
                             e.insert(self.atoms.len() - 1);
                             self.total_k += k;
                         }
@@ -65,6 +71,28 @@ impl AddOrRemove {
                     }
                 }
             }
+            AddRemoveHow::Add(_) => {
+                if atom_type == 255 {
+                    match self.atom_to_position.entry(pos) {
+                        std::collections::hash_map::Entry::Vacant(e) => {
+                            let k = if cn == 0 {
+                                tst_rate_calculation((100) as f64 * E_RATIO_BARR, temperature)
+                            } else {
+                                tst_rate_calculation((12 / cn) as f64 * E_RATIO_BARR, temperature)
+                            };
+                            self.atoms.push(AtomPosChange {
+                                pos,
+                                k,
+                                how: how.clone(),
+                            });
+                            e.insert(self.atoms.len() - 1);
+                            self.total_k += k;
+                        }
+                        _ => return,
+                    }
+                }
+            }
+            AddRemoveHow::RemoveAndAdd(_, _) => todo!(),
         }
     }
 
@@ -83,8 +111,11 @@ impl AddOrRemove {
     }
 
     pub fn cond_update_cn(&mut self, pos: u32, cn: u8, temperature: f64) {
+        if cn == 0 || cn == 3 {
+            self.remove_item(pos);
+        }
         if let Some(position) = self.atom_to_position.get(&pos) {
-            let k = tst_rate_calculation((cn) as f64 * E_RATIO_BARR, temperature);
+            let k = tst_rate_calculation((12 / cn) as f64 * E_RATIO_BARR, temperature);
             self.total_k -= self.atoms[*position].k;
             self.atoms[*position].k = k;
             self.total_k += k;
@@ -115,7 +146,7 @@ impl AddOrRemove {
         return None;
     }
 
-    pub fn iter(&self) -> std::slice::Iter<'_, Removable> {
+    pub fn iter(&self) -> std::slice::Iter<'_, AtomPosChange> {
         self.atoms.iter()
     }
 
