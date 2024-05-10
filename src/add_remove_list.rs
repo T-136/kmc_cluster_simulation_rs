@@ -28,8 +28,6 @@ pub struct AtomPosChange {
 impl AddOrRemove {
     pub fn new() -> AddOrRemove {
         let item_to_position: HashMap<u32, usize, ahash::RandomState> = HashMap::default();
-        // let item_to_position: HashMap<u64, usize, fnv::FnvBuildHasher> =
-        //     fnv::FnvHashMap::with_capacity_and_hasher(32000, Default::default());
         AddOrRemove {
             atom_to_position: item_to_position,
             atoms: Vec::new(),

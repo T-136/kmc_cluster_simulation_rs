@@ -348,8 +348,6 @@ impl crate::Simulation {
         match how {
             AddRemoveHow::Remove(_) => {
                 self.add_or_remove.remove_item(pos);
-                // self.add_or_remove
-                //     .add_item(move_to, self.atom_pos[move_to as usize].cn_metal as u8);
                 for x in self.gridstructure.nn[&pos] {
                     self.add_or_remove.cond_update_cn(
                         x,
@@ -360,24 +358,9 @@ impl crate::Simulation {
             }
             AddRemoveHow::Exchange(_, _) => {
                 self.add_or_remove.remove_item(pos);
-                // self.add_or_remove
-                //     .add_item(move_to, self.atom_pos[move_to as usize].cn_metal as u8);
-                // for x in self.gridstructure.nn[&pos] {
-                //     self.add_or_remove
-                //         .cond_update_cn(x, self.atom_pos[x as usize].cn_metal as u8);
-                // }
             }
             AddRemoveHow::Add(atom_type) => {
                 self.add_or_remove.remove_item(pos);
-                // self.add_or_remove.cond_add_item(
-                //     pos,
-                //     self.atom_pos[pos as usize].cn_metal as u8,
-                //     *atom_type,
-                //     self.temperature,
-                //     how,
-                // );
-                // self.add_or_remove
-                //     .add_item(move_to, self.atom_pos[move_to as usize].cn_metal as u8);
                 for neighbor in self.gridstructure.nn[&pos] {
                     self.add_or_remove.cond_add_item(
                         neighbor,

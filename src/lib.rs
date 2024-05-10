@@ -1,6 +1,5 @@
 use add_remove::AddRemoveHow;
 use anyhow;
-use chemfiles::{Atom, Frame, Trajectory, UnitCell};
 use core::panic;
 use csv::Writer;
 use energy::EnergyInput;
@@ -8,8 +7,6 @@ use rand;
 use rand::distributions::{Distribution, Uniform};
 use rand::prelude::*;
 use rand::rngs::SmallRng;
-use rand_distr::num_traits::float::FloatCore;
-use rand_distr::num_traits::Float;
 use rayon::prelude::*;
 use std::collections::hash_map::Entry;
 use std::collections::{BTreeMap, HashMap, HashSet};
@@ -19,7 +16,6 @@ use std::io::BufReader;
 use std::sync::Arc;
 use std::{cmp, eprint, fs, println, usize};
 
-// mod add_atom;
 mod add_remove;
 mod add_remove_list;
 pub mod alpha_energy;
@@ -397,9 +393,6 @@ impl Simulation {
         // print!("poss moves: {:?}", self.possible_moves.moves);
         println!("poss addremove: {:?}", self.add_or_remove.atoms);
 
-        let redox_time = 0.05;
-        let mut redox_update_time = 0.;
-
         for iiter in 0..self.niter {
             if iiter % section_size == 0 {
                 println!(
@@ -459,7 +452,6 @@ impl Simulation {
             if k_times_rng <= self.add_or_remove.total_k {
                 // if false {
                 // println!("depositing ");
-                redox_update_time = 0.;
 
                 let (item, k, k_tot) = self
                     .add_or_remove
@@ -473,15 +465,6 @@ impl Simulation {
                 if k_tot * 0.2 <= k || k_tot < 0.001 || iiter % 10000 == 0 {
                     self.add_or_remove.calc_total_cn_change();
                 }
-            // } else if false {
-            //     const add_atom_type: u8 = 0;
-            //     let move_to = self.possible_moves.moves[k_times_rng.floor() as usize].to;
-            //
-            //     println!("adding atom");
-            //     self.add_atom(move_to, is_recording_sections, add_atom_type);
-            //     self.add_atom_update_total_k(move_to, add_atom_type);
-            //     self.add_atom_update_possible_moves(move_to);
-            //     self.possible_moves.calc_total_k_change(self.temperature);
             } else {
                 let (move_from, move_to, e_diff, e_barr, k_tot, move_k) = self
                     .possible_moves
@@ -491,7 +474,7 @@ impl Simulation {
                 //     "{}-{}: ktot:move_K {:.5}:{:.5} {:.2} {:.2}",
                 //     move_from, move_to, k_tot, move_k, e_diff, e_barr
                 // );
-                redox_update_time -= self.increment_time(k_tot, &mut rng_choose);
+                self.increment_time(k_tot, &mut rng_choose);
 
                 self.perform_move(move_from, move_to, e_diff, is_recording_sections);
                 self.update_total_k(move_from, move_to);
@@ -578,13 +561,13 @@ impl Simulation {
             duration,
         }
     }
-    fn increment_time(&mut self, k_tot: f64, rng_e_number: &mut SmallRng) -> f64 {
+    fn increment_time(&mut self, k_tot: f64, rng_e_number: &mut SmallRng) {
         let between = Uniform::new_inclusive(0., 1.);
         let rand_value: f64 = between.sample(rng_e_number);
         // println!("k_tot: {}, rand_value ln: {}", k_tot, rand_value.ln());
 
         self.sim_time -= rand_value.ln() / k_tot;
-        rand_value.ln() / k_tot
+        // rand_value.ln() / k_tot
         // self.sim_time += 1. / k_tot
     }
 
