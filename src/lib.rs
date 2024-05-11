@@ -51,7 +51,7 @@ const how: add_remove::AddRemoveHow = add_remove::AddRemoveHow::Add(0);
 #[derive(Clone, Default)]
 pub struct AtomPosition {
     occ: u8,
-    cn_metal: usize,
+    cn_metal: u8,
     energy: f64,
     nn_support: u8,
     nn_atom_type_count: [u8; NUM_ATOM_TYPES],
@@ -167,15 +167,15 @@ impl Simulation {
                     neighbors += 1;
                 }
             }
-            atom_pos[o].cn_metal = neighbors as usize;
+            atom_pos[o].cn_metal = neighbors;
             if atom_pos[o].occ != 255 && atom_pos[o].occ != 100 {
-                cn_dict[atom_pos[o].cn_metal] += 1;
+                cn_dict[atom_pos[o].cn_metal as usize] += 1;
                 if atom_pos[o].cn_metal != 12 {
                     surface_count[atom_pos[o].occ as usize] += 1;
                 }
                 if is_supported {
                     if atom_pos[o as usize].nn_support == 1 {
-                        cn_dict_at_supp[atom_pos[o as usize].cn_metal] += 1;
+                        cn_dict_at_supp[atom_pos[o as usize].cn_metal as usize] += 1;
                     }
                 }
             };
@@ -185,7 +185,7 @@ impl Simulation {
             let mut gcn: usize = 0;
             for o1 in gridstructure.nn[&o].iter() {
                 if atom_pos[*o1 as usize].occ != 255 {
-                    gcn += atom_pos[*o1 as usize].cn_metal;
+                    gcn += atom_pos[*o1 as usize].cn_metal as usize;
                 }
             }
             gcn_metal.push(gcn);
@@ -211,21 +211,21 @@ impl Simulation {
 
             // EnergyInput::LinearGcn(_) | EnergyInput::Gcn(_) => {
             // println!("occ check{}", atom_pos[*o as usize].occ);
-            let energy = alpha_energy::e_one_atom(
-                (0, atom_pos[*o as usize].cn_metal),
+            let energy = alphas.e_one_atom(
+                atom_pos[*o as usize].cn_metal,
                 atom_pos[*o as usize].nn_atom_type_count,
                 gridstructure.nn[o].iter().filter_map(|x| {
                     if atom_pos[*x as usize].occ != 255 {
-                        Some((
-                            atom_pos[*x as usize].cn_metal,
-                            atom_pos[*x as usize].nn_atom_type_count,
-                            atom_pos[*x as usize].occ as usize,
-                        ))
+                        Some(alpha_energy::NnData {
+                            cn_metal: atom_pos[*x as usize].cn_metal,
+                            nn_atom_type_count_num_list: atom_pos[*x as usize].nn_atom_type_count,
+                            atom_type: atom_pos[*x as usize].occ as usize,
+                        })
                     } else {
                         None
                     }
                 }),
-                atom_pos[*o as usize].occ as usize,
+                atom_pos[*o as usize].occ,
                 at_support,
                 support_e,
             );
@@ -449,8 +449,8 @@ impl Simulation {
             //         .sum::<usize>()
             // );
 
-            if k_times_rng <= self.add_or_remove.total_k {
-                // if false {
+            // if k_times_rng <= self.add_or_remove.total_k {
+            if false {
                 // println!("depositing ");
 
                 let (item, k, k_tot) = self
@@ -685,23 +685,23 @@ impl Simulation {
     }
 
     #[inline]
-    fn update_cn_dict(&mut self, nn_supp: u8, cn: usize, change_is_positiv: bool) {
+    fn update_cn_dict(&mut self, nn_supp: u8, cn: u8, change_is_positiv: bool) {
         match change_is_positiv {
             true => {
                 if self.is_supported {
                     if nn_supp == 1 {
-                        self.cn_dict_at_supp[cn] += 1;
+                        self.cn_dict_at_supp[cn as usize] += 1;
                     }
                 }
-                self.cn_dict[cn] += 1;
+                self.cn_dict[cn as usize] += 1;
             }
             false => {
                 if self.is_supported {
                     if nn_supp == 1 {
-                        self.cn_dict_at_supp[cn] -= 1;
+                        self.cn_dict_at_supp[cn as usize] -= 1;
                     }
                 }
-                self.cn_dict[cn] -= 1;
+                self.cn_dict[cn as usize] -= 1;
             }
         }
     }
@@ -926,7 +926,7 @@ impl Simulation {
         let atom_typ_index = self.atom_pos[*x as usize].occ;
         if atom_typ_index != 0 {
             Some((
-                self.atom_pos[*x as usize].cn_metal,
+                self.atom_pos[*x as usize].cn_metal as usize,
                 self.atom_pos[*x as usize].occ,
             ))
         } else {
@@ -988,7 +988,7 @@ impl Simulation {
                     None
                 }
             }),
-            self.atom_pos[move_from as usize].occ as usize,
+            self.atom_pos[move_from as usize].occ,
             0,
             0,
         );
@@ -1020,7 +1020,7 @@ impl Simulation {
                     None
                 }
             }),
-            self.atom_pos[move_from as usize].occ as usize,
+            self.atom_pos[move_from as usize].occ,
             0,
             0,
         );

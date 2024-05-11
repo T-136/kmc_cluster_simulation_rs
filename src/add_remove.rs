@@ -158,7 +158,7 @@ impl crate::Simulation {
                             None
                         }
                     }),
-                    *remove_atom_type as usize,
+                    *remove_atom_type,
                     0,
                     0,
                 );
@@ -180,7 +180,7 @@ impl crate::Simulation {
                             None
                         }
                     }),
-                    *remove_atom_type as usize,
+                    *remove_atom_type,
                     0,
                     0,
                 );
@@ -200,7 +200,7 @@ impl crate::Simulation {
                             None
                         }
                     }),
-                    *add_atom_type as usize,
+                    *add_atom_type,
                     0,
                     0,
                 );
@@ -222,7 +222,7 @@ impl crate::Simulation {
                             None
                         }
                     }),
-                    *add_atom_type as usize,
+                    *add_atom_type,
                     0,
                     0,
                 )
