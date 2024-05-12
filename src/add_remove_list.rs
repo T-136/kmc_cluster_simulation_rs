@@ -8,7 +8,11 @@ use crate::add_remove::AddRemoveHow;
 
 const CN_FOR_INV: u8 = 12;
 // const E_RATIO: f64 = 0.20; 400K
-const E_RATIO_BARR: f64 = 0.1300000;
+const E_RATIO_BARR: f64 = 0.1400000;
+
+const CN_E: [f64; 13] = [0., 1., 2., 3., 4., 5., 6., 7., 8., 9., 10., 11., 12.];
+// const CN_E_ADD: [f64; 13] = [12., 11., 10., 6., 9., 8., 6., 5., 4., 3., 2., 1., 0.];
+const CN_E_ADD: [f64; 13] = [12., 11., 4., 4., 9., 9., 9., 9., 9., 9., 9., 9., 0.];
 
 #[derive(Clone, Debug)]
 pub struct AddOrRemove {
@@ -76,7 +80,10 @@ impl AddOrRemove {
                             let k = if cn == 0 {
                                 tst_rate_calculation((100) as f64 * E_RATIO_BARR, temperature)
                             } else {
-                                tst_rate_calculation((12 / cn) as f64 * E_RATIO_BARR, temperature)
+                                tst_rate_calculation(
+                                    CN_E_ADD[cn as usize] * E_RATIO_BARR,
+                                    temperature,
+                                )
                             };
                             self.atoms.push(AtomPosChange {
                                 pos,
@@ -113,7 +120,7 @@ impl AddOrRemove {
             self.remove_item(pos);
         }
         if let Some(position) = self.atom_to_position.get(&pos) {
-            let k = tst_rate_calculation((12 / cn) as f64 * E_RATIO_BARR, temperature);
+            let k = tst_rate_calculation(CN_E_ADD[cn as usize] * E_RATIO_BARR, temperature);
             self.total_k -= self.atoms[*position].k;
             self.atoms[*position].k = k;
             self.total_k += k;

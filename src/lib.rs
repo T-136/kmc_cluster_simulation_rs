@@ -406,7 +406,7 @@ impl Simulation {
                     self.possible_moves.total_k
                 );
                 println!(
-                    "possible_moves len {} k {}",
+                    "add_or_remove len {} k {}",
                     self.add_or_remove.atoms.len(),
                     self.add_or_remove.total_k
                 );
@@ -449,8 +449,8 @@ impl Simulation {
             //         .sum::<usize>()
             // );
 
-            // if k_times_rng <= self.add_or_remove.total_k {
-            if false {
+            if k_times_rng <= self.add_or_remove.total_k {
+                // if false {
                 // println!("depositing ");
 
                 let (item, k, k_tot) = self
