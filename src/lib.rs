@@ -19,6 +19,7 @@ use std::{cmp, eprint, fs, println, usize};
 mod add_remove;
 mod add_remove_list;
 pub mod alpha_energy;
+mod buckets;
 pub mod energy;
 mod grid_structure;
 mod listdict;
@@ -211,6 +212,7 @@ impl Simulation {
 
             // EnergyInput::LinearGcn(_) | EnergyInput::Gcn(_) => {
             // println!("occ check{}", atom_pos[*o as usize].occ);
+
             let energy = alphas.e_one_atom(
                 atom_pos[*o as usize].cn_metal,
                 atom_pos[*o as usize].nn_atom_type_count,

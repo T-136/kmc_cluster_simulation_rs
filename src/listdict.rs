@@ -4,6 +4,7 @@ use rand::rngs::SmallRng;
 use rand::seq::SliceRandom;
 use rand_distr::num_traits::Float;
 use std::collections::HashMap;
+use std::sync::Arc;
 use std::usize;
 
 #[derive(Clone, Debug)]
@@ -16,7 +17,7 @@ pub struct ListDict {
 
 #[derive(Clone, Debug)]
 pub struct Move {
-    from: u32,
+    pub from: u32,
     pub to: u32,
     e_diff: f64,
     e_barr: f64,

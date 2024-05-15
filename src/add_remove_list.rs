@@ -24,7 +24,7 @@ pub struct AddOrRemove {
 
 #[derive(Clone, Debug)]
 pub struct AtomPosChange {
-    pos: u32,
+    pub pos: u32,
     k: f64,
     how: AddRemoveHow,
 }

@@ -10,8 +10,8 @@
 pub struct Alphas {
     //alphas and alphas_summed_to_x are div by cn
     //atom_type_index;in_atom_type_index;cn-1
-    pub div_by_cn: [[[f64; 12]; super::NUM_ATOM_TYPES]; super::NUM_ATOM_TYPES],
-    pub summed_to_x_div_cn: [[[f64; 12]; super::NUM_ATOM_TYPES]; super::NUM_ATOM_TYPES],
+    pub cn: [[[f64; 12]; super::NUM_ATOM_TYPES]; super::NUM_ATOM_TYPES],
+    pub summed_to_x: [[[f64; 12]; super::NUM_ATOM_TYPES]; super::NUM_ATOM_TYPES],
 }
 
 impl Alphas {
@@ -23,8 +23,8 @@ impl Alphas {
         //better first
         // Alphas::alphas_div_by_cn(&mut alphas_input);
         Alphas {
-            div_by_cn: alphas_input,
-            summed_to_x_div_cn: alphas_summed_to_x,
+            cn: alphas_input,
+            summed_to_x: alphas_summed_to_x,
         }
     }
 
@@ -109,7 +109,7 @@ impl Alphas {
             .iter()
             .enumerate()
             .for_each(|(metal_type, nn_atom_type_count_num)| {
-                energy += self.summed_to_x_div_cn[atom_type][metal_type][cn_metal - 1]
+                energy += self.summed_to_x[atom_type][metal_type][cn_metal - 1]
                     * *nn_atom_type_count_num as f64
                     / cn_metal as f64
             });
@@ -133,7 +133,7 @@ impl Alphas {
         if cn_metal != 0 {
             nn_atom_type_count.iter().enumerate().for_each(
                 |(metal_type, nn_atom_type_count_num)| {
-                    energy += self.summed_to_x_div_cn[atom_type as usize][metal_type]
+                    energy += self.summed_to_x[atom_type as usize][metal_type]
                         [(cn_metal - 1) as usize]
                         * *nn_atom_type_count_num as f64
                         / cn_metal as f64
@@ -155,7 +155,7 @@ impl Alphas {
                     .iter()
                     .enumerate()
                     .for_each(|(metal_type_index, nn_atom_type_count_num)| {
-                        energy += self.div_by_cn[nn_atom_type_counts.atom_type][metal_type_index]
+                        energy += self.cn[nn_atom_type_counts.atom_type][metal_type_index]
                             [(nn_atom_type_counts.cn_metal - 1) as usize]
                             / nn_atom_type_counts.cn_metal as f64
                             * *nn_atom_type_count_num as f64
@@ -228,11 +228,10 @@ mod tests {
         }
         println!(
             "alphas {:?} \n alphas sumed: {:?}",
-            alphas.div_by_cn, alphas.summed_to_x_div_cn
+            alphas.cn, alphas.summed_to_x
         );
         assert!(
-            alphas.summed_to_x_div_cn[0][0][cn - 1] * 2.
-                + alphas.summed_to_x_div_cn[1][0][cn - 1] * 2.
+            alphas.summed_to_x[0][0][cn - 1] * 2. + alphas.summed_to_x[1][0][cn - 1] * 2.
                 - summed_alphas
                 < 0.00001
         )

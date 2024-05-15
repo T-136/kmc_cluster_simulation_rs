@@ -291,7 +291,7 @@ fn main() {
     // let alphas = alpha_energy::Alphas::new(alpha_energy::energy_const);
     println!(
         "alphas: {:?} \n sum alphas: {:?}",
-        alphas.div_by_cn, alphas.summed_to_x_div_cn
+        alphas.cn, alphas.summed_to_x
     );
     let alphas_arc = Arc::new(alphas);
 
