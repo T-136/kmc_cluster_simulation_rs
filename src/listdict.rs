@@ -19,8 +19,9 @@ pub struct ListDict {
 pub struct Move {
     pub from: u32,
     pub to: u32,
-    e_diff: f64,
-    e_barr: f64,
+    pub e_diff: f64,
+    pub e_barr: f64,
+    pub k: f64,
 }
 
 impl ListDict {
@@ -61,6 +62,7 @@ impl ListDict {
                     to: move_to,
                     e_diff,
                     e_barr,
+                    k: k,
                 });
                 self.moves_k.push(k);
                 e.insert(self.moves.len() - 1);
