@@ -25,8 +25,53 @@ pub struct AddOrRemove {
 #[derive(Clone, Debug)]
 pub struct AtomPosChange {
     pub pos: u32,
-    k: f64,
+    pub k: f64,
     how: AddRemoveHow,
+}
+
+impl AtomPosChange {
+    pub fn new(
+        pos: u32,
+        cn: u8,
+        atom_type: u8,
+        temperature: f64,
+        how: AddRemoveHow,
+    ) -> Option<AtomPosChange> {
+        return None;
+        if cn >= 11 {
+            return None;
+        }
+        match how {
+            add_remove::AddRemoveHow::Remove(remove_atom_type)
+            | add_remove::AddRemoveHow::Exchange(remove_atom_type, _) => {
+                if atom_type == remove_atom_type {
+                    let k = tst_rate_calculation(cn as f64 * E_RATIO_BARR, temperature);
+                    return Some(AtomPosChange {
+                        pos,
+                        k: tst_rate_calculation(cn as f64 * E_RATIO_BARR, temperature),
+                        how,
+                    });
+                }
+            }
+            AddRemoveHow::Add(_) => {
+                if atom_type == 255 {
+                    let k = if cn == 0 {
+                        tst_rate_calculation((100) as f64 * E_RATIO_BARR, temperature)
+                    } else {
+                        tst_rate_calculation(CN_E_ADD[cn as usize] * E_RATIO_BARR, temperature)
+                    };
+                    return Some(AtomPosChange {
+                        pos,
+                        k: tst_rate_calculation(cn as f64 * E_RATIO_BARR, temperature),
+                        how,
+                    });
+                }
+            }
+            AddRemoveHow::RemoveAndAdd(_, _) => todo!(),
+        }
+
+        None
+    }
 }
 
 impl AddOrRemove {

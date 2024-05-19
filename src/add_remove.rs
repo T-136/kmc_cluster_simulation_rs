@@ -238,7 +238,7 @@ impl crate::Simulation {
             AddRemoveHow::Remove(remove_atom_index) => {
                 for nn_to_pos in self.gridstructure.nn[&pos] {
                     if self.atom_pos[nn_to_pos as usize].occ == 255 {
-                        self.possible_moves.remove_item(pos, nn_to_pos);
+                        self.possible_moves.remove_move(pos, nn_to_pos);
                     }
                     if self.atom_pos[nn_to_pos as usize].occ != 255
                         && self.atom_pos[nn_to_pos as usize].occ != 100
@@ -252,13 +252,16 @@ impl crate::Simulation {
                             );
                             let e_barr = alpha_energy::e_barrier(prev_e, future_e);
                             assert!(self.atom_pos[nn_to_pos as usize].occ != 100);
-                            self.possible_moves.add_item(
+
+                            let mmove = super::listdict::Move::new(
                                 nn_to_pos,
                                 pos,
                                 future_e - prev_e,
                                 e_barr,
                                 self.temperature,
                             );
+                            self.possible_moves
+                                .cond_add_item(crate::ItemEnum::Move(mmove));
                         }
                     }
                 }
@@ -272,13 +275,15 @@ impl crate::Simulation {
                             self.atom_pos[pos as usize].occ,
                         );
                         let e_barr = alpha_energy::e_barrier(prev_e, future_e);
-                        self.possible_moves.update_k_if_move_exists(
-                            pos,
+                        let mmove = super::listdict::Move::new(
                             nn_to_pos,
+                            pos,
                             future_e - prev_e,
                             e_barr,
-                            temperature,
+                            self.temperature,
                         );
+                        self.possible_moves
+                            .update_k_if_item_exists(crate::ItemEnum::Move(mmove));
                     }
                 }
             }
@@ -287,7 +292,7 @@ impl crate::Simulation {
                     if self.atom_pos[nn_to_atom as usize].occ != 255
                         && self.atom_pos[nn_to_atom as usize].occ != 100
                     {
-                        self.possible_moves.remove_item(nn_to_atom, pos);
+                        self.possible_moves.remove_move(nn_to_atom, pos);
                     }
                     if self.atom_pos[nn_to_atom as usize].occ == 255 {
                         // greater than one because of neighbor moving in this spot
@@ -299,13 +304,15 @@ impl crate::Simulation {
                             );
                             let e_barr = alpha_energy::e_barrier(prev_e, future_e);
                             assert!(self.atom_pos[pos as usize].occ != 100);
-                            self.possible_moves.add_item(
+                            let mmove = super::listdict::Move::new(
                                 pos,
                                 nn_to_atom,
                                 future_e - prev_e,
                                 e_barr,
                                 self.temperature,
                             );
+                            self.possible_moves
+                                .cond_add_item(crate::ItemEnum::Move(mmove));
                         }
                     }
                 }
@@ -330,16 +337,24 @@ impl crate::Simulation {
                 } else {
                     continue;
                 };
+                println!(
+                    "{} {} {}",
+                    self.atom_pos[full as usize].cn_metal,
+                    self.atom_pos[empty as usize].cn_metal,
+                    self.atom_pos[full as usize].occ
+                );
                 let (prev_e, future_e) =
                     self.calc_energy_change_by_move(full, empty, self.atom_pos[full as usize].occ);
                 let e_barr = alpha_energy::e_barrier(prev_e, future_e);
-                self.possible_moves.update_k_if_move_exists(
+                let mmove = super::listdict::Move::new(
                     full,
                     empty,
                     future_e - prev_e,
                     e_barr,
                     self.temperature,
                 );
+                self.possible_moves
+                    .update_k_if_item_exists(crate::ItemEnum::Move(mmove));
             }
         }
     }
@@ -347,33 +362,45 @@ impl crate::Simulation {
     pub fn redox_update_add_remove(&mut self, pos: u32, how: &AddRemoveHow) {
         match how {
             AddRemoveHow::Remove(_) => {
-                self.add_or_remove.remove_item(pos);
+                self.possible_moves.remove_add_remove(pos);
                 for x in self.gridstructure.nn[&pos] {
-                    self.add_or_remove.cond_update_cn(
+                    let pos = super::add_remove_list::AtomPosChange::new(
                         x,
                         self.atom_pos[x as usize].cn_metal as u8,
+                        self.atom_pos[x as usize].occ as u8,
                         self.temperature,
+                        how.clone(),
                     );
+                    if let Some(pos) = pos {
+                        self.possible_moves
+                            .update_k_if_item_exists(crate::ItemEnum::AddOrRemove(pos));
+                    }
                 }
             }
             AddRemoveHow::Exchange(_, _) => {
-                self.add_or_remove.remove_item(pos);
+                self.possible_moves.remove_add_remove(pos);
             }
             AddRemoveHow::Add(atom_type) => {
-                self.add_or_remove.remove_item(pos);
+                self.possible_moves.remove_add_remove(pos);
                 for neighbor in self.gridstructure.nn[&pos] {
-                    self.add_or_remove.cond_add_item(
+                    let pos = super::add_remove_list::AtomPosChange::new(
                         neighbor,
                         self.atom_pos[neighbor as usize].cn_metal as u8,
                         self.atom_pos[neighbor as usize].occ,
                         self.temperature,
-                        how,
+                        how.clone(),
                     );
-                    self.add_or_remove.cond_update_cn(
-                        neighbor,
-                        self.atom_pos[neighbor as usize].cn_metal as u8,
-                        self.temperature,
-                    );
+                    if let Some(pos) = pos {
+                        self.possible_moves
+                            .cond_add_item(crate::ItemEnum::AddOrRemove(pos));
+                    }
+
+                    // maybe not necessary if prev does it
+                    // self.add_or_remove.cond_update_cn(
+                    //     neighbor,
+                    //     self.atom_pos[neighbor as usize].cn_metal as u8,
+                    //     self.temperature,
+                    // );
                 }
             }
             AddRemoveHow::RemoveAndAdd(_, _) => todo!(),

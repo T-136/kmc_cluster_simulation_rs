@@ -24,6 +24,18 @@ pub struct Move {
     pub k: f64,
 }
 
+impl Move {
+    pub fn new(from: u32, to: u32, e_barr: f64, e_diff: f64, temperature: f64) -> Move {
+        Move {
+            from,
+            to,
+            e_diff,
+            e_barr,
+            k: tst_rate_calculation(e_diff, e_barr, temperature),
+        }
+    }
+}
+
 impl ListDict {
     pub fn new(grid_size: [u32; 3]) -> ListDict {
         let largest_atom_position = grid_size[0] * grid_size[1] * grid_size[2] * 4;
@@ -207,7 +219,7 @@ impl ListDict {
     }
 }
 
-fn tst_rate_calculation(e_diff: f64, e_barr: f64, temperature: f64) -> f64 {
+pub fn tst_rate_calculation(e_diff: f64, e_barr: f64, temperature: f64) -> f64 {
     // let e_use = if e_diff.is_negative() { 0. } else { e_diff };
     // println!("barr {}", e_barr);
     // println!("diff {}", e_diff);

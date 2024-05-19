@@ -19,7 +19,7 @@ use std::{cmp, eprint, fs, println, usize};
 mod add_remove;
 mod add_remove_list;
 pub mod alpha_energy;
-mod buckets;
+mod buckets_linear;
 pub mod energy;
 mod grid_structure;
 mod listdict;
@@ -28,8 +28,11 @@ mod setup;
 mod sim;
 
 pub use alpha_energy::Alphas;
+pub use buckets_linear::ItemEnum;
 pub use grid_structure::GridStructure;
 pub use sim::Results;
+
+use crate::add_remove_list::AddOrRemove;
 
 const CN: usize = 12;
 // const GCN: usize = 54;
@@ -66,7 +69,7 @@ pub struct Simulation {
     composition: f64,
     number_all_atoms: u32,
     onlyocc: HashSet<u32, fnv::FnvBuildHasher>,
-    possible_moves: listdict::ListDict,
+    possible_moves: buckets_linear::Buckets,
     sim_time: f64,
     total_energy: f64,
     cn_dict: [u32; CN + 1],
@@ -87,7 +90,7 @@ pub struct Simulation {
     gridstructure: Arc<GridStructure>,
     support_e: i64,
     is_supported: bool,
-    add_or_remove: add_remove_list::AddOrRemove,
+    // add_or_remove: add_remove_list::AddOrRemove,
 }
 
 impl Simulation {
@@ -193,7 +196,7 @@ impl Simulation {
         }
 
         let mut total_energy: f64 = 0.;
-        let possible_moves: listdict::ListDict = listdict::ListDict::new(GRID_SIZE);
+        let possible_moves: buckets_linear::Buckets = buckets_linear::Buckets::new();
         let add_or_remove: add_remove_list::AddOrRemove = add_remove_list::AddOrRemove::new();
 
         for o in onlyocc.iter() {
@@ -235,16 +238,6 @@ impl Simulation {
             total_energy += energy;
             // }
             // };
-
-            // for u in &gridstructure.nn[o] {
-            //     if occ[*u as usize] == 0 {
-            //         // >1 so that atoms cant leave the cluster
-            //         // <x cant move if all neighbors are occupied
-            //         if cn_metal[*u as usize] > 1 {
-            //             possible_moves.add_item(*o, *u, Some(10_i64))
-            //         }
-            //     }
-            // }
         }
 
         let simulation_folder_name = std::format!("{}K_{}I_{}A", temperature, niter, onlyocc.len());
@@ -324,13 +317,29 @@ impl Simulation {
             // neighboring_atom_type_count,
             support_e,
             is_supported,
-            add_or_remove,
+            // add_or_remove,
+        }
+    }
+
+    fn check_moves_not_start_255(&self, bucket: &buckets_linear::Bucket) {
+        for item in bucket.items.iter() {
+            if let buckets_linear::ItemEnum::Move(mmove) = item {
+                if self.atom_pos[mmove.from as usize].occ == 255 {
+                    println!("atom from {}", mmove.from);
+                    println!("atomt from {}", self.atom_pos[mmove.from as usize].occ);
+                    println!("atomt to {}", self.atom_pos[mmove.to as usize].occ);
+                    println!("panicked item {:?}", item);
+                    panic!("checked for 255");
+                }
+            }
         }
     }
 
     pub fn run(&mut self, mut amount_unique_levels: i32) -> Results {
         let save_every_nth: u64 = 100;
         let mut rng_choose = SmallRng::from_entropy();
+        let mut bucket_pick = SmallRng::from_entropy();
+        let mut coin_toss = SmallRng::from_entropy();
 
         let cut_off_perc = self.optimization_cut_off_fraction[0] as f64
             / self.optimization_cut_off_fraction[1] as f64;
@@ -348,20 +357,24 @@ impl Simulation {
                 self.number_all_atoms as usize,
                 Default::default(),
             );
-        if self.niter == 0 {
-            if let Some(x) = self.opt_save_lowest_energy(&0, &mut lowest_energy_struct) {
-                lowest_e_onlyocc = x;
-            };
-        }
+        // if self.niter == 0 {
+        //     if let Some(x) = self.opt_save_lowest_energy(&0, &mut lowest_energy_struct) {
+        //         lowest_e_onlyocc = x;
+        //     };
+        // }
 
         for (i, o) in self.atom_pos.iter().enumerate() {
-            self.add_or_remove.cond_add_item(
+            let pos_change = add_remove_list::AtomPosChange::new(
                 i as u32,
                 o.cn_metal as u8,
                 o.occ,
                 self.temperature,
-                &how,
+                how.clone(),
             );
+            if let Some(pos_change) = pos_change {
+                self.possible_moves
+                    .cond_add_item(ItemEnum::AddOrRemove(pos_change));
+            }
             if o.occ != 255 && o.occ != 100 {
                 for u in &self.gridstructure.nn[&(i as u32)] {
                     if self.atom_pos[*u as usize].occ == 255 {
@@ -371,21 +384,23 @@ impl Simulation {
                             let (prev_e, future_e) =
                                 self.calc_energy_change_by_move(i as u32, *u, o.occ);
                             let e_barr = alpha_energy::e_barrier(prev_e, future_e);
-                            self.possible_moves.add_item(
+                            let mmove = listdict::Move::new(
                                 i as u32,
                                 *u,
-                                future_e - prev_e,
                                 e_barr,
+                                future_e - prev_e,
                                 self.temperature,
-                            )
+                            );
+                            assert!(self.atom_pos[i as usize].occ != 255);
+                            self.possible_moves.cond_add_item(ItemEnum::Move(mmove))
                         }
                     }
                 }
             }
         }
 
-        self.possible_moves.calc_total_k_change(self.temperature);
-        self.add_or_remove.calc_total_cn_change();
+        // self.possible_moves.calc_total_k_change(self.temperature);
+        // self.add_or_remove.calc_total_cn_change();
 
         let section_size: u64 = self.niter / AMOUNT_SECTIONS as u64;
         println!("section_size: {}", section_size);
@@ -393,7 +408,6 @@ impl Simulation {
         println!("niter: {}", self.niter);
 
         // print!("poss moves: {:?}", self.possible_moves.moves);
-        println!("poss addremove: {:?}", self.add_or_remove.atoms);
 
         for iiter in 0..self.niter {
             if iiter % section_size == 0 {
@@ -404,15 +418,22 @@ impl Simulation {
                 );
                 println!(
                     "possible_moves len {} k {}",
-                    self.possible_moves.moves.len(),
+                    self.possible_moves
+                        .iter()
+                        .map(|x| x.items.len())
+                        .sum::<usize>(),
                     self.possible_moves.total_k
                 );
-                println!(
-                    "add_or_remove len {} k {}",
-                    self.add_or_remove.atoms.len(),
-                    self.add_or_remove.total_k
-                );
                 // println!("poss addremove: {:?}", self.add_or_remove.atoms);
+                println!(
+                    "buckets: {} {:?} ",
+                    self.possible_moves.buckets_list.len(),
+                    self.possible_moves
+                        .buckets_list
+                        .iter()
+                        .map(|bucket| (bucket.bucket_power, bucket.own_k))
+                        .collect::<Vec<(i32, f64)>>()
+                );
             }
             let is_recording_sections = iiter * self.optimization_cut_off_fraction[1]
                 >= self.niter * self.optimization_cut_off_fraction[0];
@@ -437,11 +458,6 @@ impl Simulation {
             };
             self.cond_snap_and_heat_map(&iiter);
 
-            let between = Uniform::new_inclusive(0., 1.);
-            let mut k_times_rng = between.sample(&mut rng_choose)
-                // * self.possible_moves._len() as f64
-                * (self.possible_moves.total_k + self.add_or_remove.total_k as f64);
-
             // println!(
             //     "total cn: {}, ",
             //     self.atom_pos
@@ -451,53 +467,43 @@ impl Simulation {
             //         .sum::<usize>()
             // );
 
-            if k_times_rng <= self.add_or_remove.total_k {
-                // if false {
-                // println!("depositing ");
+            let (item, k_tot) = self
+                .possible_moves
+                .choose_ramdom_move_kmc(
+                    &mut rng_choose,
+                    &mut bucket_pick,
+                    &mut coin_toss,
+                    self.temperature,
+                )
+                .expect("kmc pick move failed");
+            match item.clone() {
+                ItemEnum::Move(mmove) => {
+                    self.increment_time(k_tot, &mut rng_choose);
 
-                let (item, k, k_tot) = self
-                    .add_or_remove
-                    .choose_ramdom_atom_to_remove(&mut rng_choose)
-                    .expect("wtf no add_or_remove");
-                self.change_item(item, &how, is_recording_sections);
-                self.redox_update_total_k(item);
-                self.redox_update_possibel_moves(item, &how, self.temperature);
-                self.redox_update_add_remove(item, &how);
-
-                if k_tot * 0.2 <= k || k_tot < 0.001 || iiter % 10000 == 0 {
-                    self.add_or_remove.calc_total_cn_change();
+                    self.possible_moves.remove_move(mmove.from, mmove.to);
+                    self.perform_move(mmove.from, mmove.to, mmove.e_diff, is_recording_sections);
+                    self.update_moves(mmove.from, mmove.to);
+                    self.update_possible_moves(mmove.from, mmove.to);
+                    self.update_add_remove(mmove.from, mmove.to, &how);
+                    if let Some(map) = &mut self.heat_map {
+                        map[mmove.to as usize] += 1;
+                        map[mmove.from as usize] += 1;
+                    }
                 }
-            } else {
-                let (move_from, move_to, e_diff, e_barr, k_tot, move_k) = self
-                    .possible_moves
-                    .choose_ramdom_move_kmc(&mut rng_choose, self.temperature)
-                    .expect("kmc pick move failed");
-                // println!(
-                //     "{}-{}: ktot:move_K {:.5}:{:.5} {:.2} {:.2}",
-                //     move_from, move_to, k_tot, move_k, e_diff, e_barr
-                // );
-                self.increment_time(k_tot, &mut rng_choose);
-
-                self.perform_move(move_from, move_to, e_diff, is_recording_sections);
-                self.update_total_k(move_from, move_to);
-                self.update_possible_moves(move_from, move_to);
-                self.update_add_remove(move_from, move_to, &how);
-                if let Some(map) = &mut self.heat_map {
-                    map[move_to as usize] += 1;
-                    map[move_from as usize] += 1;
-                }
-
-                if k_tot * 0.2 <= move_k || k_tot < 0.001 || iiter % 10000 == 0 {
-                    self.possible_moves.calc_total_k_change(self.temperature);
+                ItemEnum::AddOrRemove(change) => {
+                    self.change_item(change.pos, &how, is_recording_sections);
+                    self.redox_update_total_k(change.pos);
+                    self.redox_update_possibel_moves(change.pos, &how, self.temperature);
+                    self.redox_update_add_remove(change.pos, &how);
                 }
             }
-            if iiter * self.optimization_cut_off_fraction[1]
-                >= self.niter * self.optimization_cut_off_fraction[0]
-            {
-                if let Some(x) = self.opt_save_lowest_energy(&iiter, &mut lowest_energy_struct) {
-                    lowest_e_onlyocc = x;
-                };
-            }
+            // if iiter * self.optimization_cut_off_fraction[1]
+            //     >= self.niter * self.optimization_cut_off_fraction[0]
+            // {
+            //     if let Some(x) = self.opt_save_lowest_energy(&iiter, &mut lowest_energy_struct) {
+            //         lowest_e_onlyocc = x;
+            //     };
+            // }
 
             if SAVE_ENTIRE_SIM || is_recording_sections {
                 (temp_energy_section, temp_surface_composition) = self.save_sections(
@@ -566,7 +572,6 @@ impl Simulation {
     fn increment_time(&mut self, k_tot: f64, rng_e_number: &mut SmallRng) {
         let between = Uniform::new_inclusive(0., 1.);
         let rand_value: f64 = between.sample(rng_e_number);
-        // println!("k_tot: {}, rand_value ln: {}", k_tot, rand_value.ln());
 
         self.sim_time -= rand_value.ln() / k_tot;
         // rand_value.ln() / k_tot
@@ -647,44 +652,44 @@ impl Simulation {
         (temp_energy_section, temp_surface_composition)
     }
 
-    fn opt_save_lowest_energy(
-        &mut self,
-        iiter: &u64,
-        lowest_energy_struct: &mut sim::LowestEnergy,
-    ) -> Option<HashSet<u32, fnv::FnvBuildHasher>> {
-        if lowest_energy_struct.energy > (self.total_energy as f64 / 1000.) {
-            let mut empty_neighbor_cn: HashMap<u8, u32> = HashMap::new();
-            let empty_set: HashSet<&u32> =
-                HashSet::from_iter(self.possible_moves.iter().map(|mmove| &mmove.to));
-            for empty in empty_set {
-                if self.atom_pos[*empty as usize].cn_metal > 3 {
-                    empty_neighbor_cn
-                        .entry(self.atom_pos[*empty as usize].cn_metal as u8)
-                        .and_modify(|x| *x += 1)
-                        .or_insert(1);
-                }
-            }
-            lowest_energy_struct.empty_cn = empty_neighbor_cn;
-            lowest_energy_struct.energy = self.total_energy as f64 / 1000.;
-            lowest_energy_struct.iiter = *iiter;
-
-            let mut cn_hash_map: HashMap<u8, u32> = HashMap::new();
-            for (i, v) in self.cn_dict.into_iter().enumerate() {
-                cn_hash_map.insert(i as u8, v);
-            }
-            lowest_energy_struct.cn_total = cn_hash_map;
-
-            let mut cn_hash_map_at_supp: HashMap<u8, u32> = HashMap::new();
-            for (i, v) in self.cn_dict_at_supp.into_iter().enumerate() {
-                cn_hash_map_at_supp.insert(i as u8, v);
-            }
-            lowest_energy_struct.cn_dict_at_supp = cn_hash_map_at_supp;
-
-            Some(self.onlyocc.clone())
-        } else {
-            None
-        }
-    }
+    // fn opt_save_lowest_energy(
+    //     &mut self,
+    //     iiter: &u64,
+    //     lowest_energy_struct: &mut sim::LowestEnergy,
+    // ) -> Option<HashSet<u32, fnv::FnvBuildHasher>> {
+    //     if lowest_energy_struct.energy > (self.total_energy as f64 / 1000.) {
+    //         let mut empty_neighbor_cn: HashMap<u8, u32> = HashMap::new();
+    //         let empty_set: HashSet<&u32> =
+    //             HashSet::from_iter(self.possible_moves.iter().map(|mmove| &mmove.to));
+    //         for empty in empty_set {
+    //             if self.atom_pos[*empty as usize].cn_metal > 3 {
+    //                 empty_neighbor_cn
+    //                     .entry(self.atom_pos[*empty as usize].cn_metal as u8)
+    //                     .and_modify(|x| *x += 1)
+    //                     .or_insert(1);
+    //             }
+    //         }
+    //         lowest_energy_struct.empty_cn = empty_neighbor_cn;
+    //         lowest_energy_struct.energy = self.total_energy as f64 / 1000.;
+    //         lowest_energy_struct.iiter = *iiter;
+    //
+    //         let mut cn_hash_map: HashMap<u8, u32> = HashMap::new();
+    //         for (i, v) in self.cn_dict.into_iter().enumerate() {
+    //             cn_hash_map.insert(i as u8, v);
+    //         }
+    //         lowest_energy_struct.cn_total = cn_hash_map;
+    //
+    //         let mut cn_hash_map_at_supp: HashMap<u8, u32> = HashMap::new();
+    //         for (i, v) in self.cn_dict_at_supp.into_iter().enumerate() {
+    //             cn_hash_map_at_supp.insert(i as u8, v);
+    //         }
+    //         lowest_energy_struct.cn_dict_at_supp = cn_hash_map_at_supp;
+    //
+    //         Some(self.onlyocc.clone())
+    //     } else {
+    //         None
+    //     }
+    // }
 
     #[inline]
     fn update_cn_dict(&mut self, nn_supp: u8, cn: u8, change_is_positiv: bool) {
@@ -1031,7 +1036,7 @@ impl Simulation {
         (prev_e - tst_e, future_e - tst_e)
     }
 
-    fn update_total_k(&mut self, move_from: u32, move_to: u32) {
+    fn update_moves(&mut self, move_from: u32, move_to: u32) {
         // match self.energy {
         //     EnergyInput::LinearCn(_) | EnergyInput::Cn(_) => {
         // let i_slice = &self.gridstructure.nn_pair_no_intersec
@@ -1050,13 +1055,16 @@ impl Simulation {
                     self.atom_pos[pos.0 as usize].occ,
                 );
                 let e_barr = alpha_energy::e_barrier(prev_e, future_e);
-                self.possible_moves.update_k_if_move_exists(
-                    pos.0,
-                    pos.1,
-                    future_e - prev_e,
-                    e_barr,
-                    self.temperature,
-                );
+                let mmove =
+                    listdict::Move::new(pos.0, pos.1, future_e - prev_e, e_barr, self.temperature);
+                assert!(self.atom_pos[pos.0 as usize].occ != 255);
+                self.possible_moves
+                    .update_k_if_item_exists(ItemEnum::Move(mmove));
+                // self.possible_moves.update_k_if_move_exists(
+                //     pos.0,
+                //     pos.1,
+                //     listdict::tst_rate_calculation(future_e - prev_e, e_barr, self.temperature),
+                // );
             }
             if self.atom_pos[pos.1 as usize].occ != 100
                 && self.atom_pos[pos.1 as usize].occ != 255
@@ -1068,13 +1076,16 @@ impl Simulation {
                     self.atom_pos[pos.1 as usize].occ,
                 );
                 let e_barr = alpha_energy::e_barrier(prev_e, future_e);
-                self.possible_moves.update_k_if_move_exists(
-                    pos.1,
-                    pos.0,
-                    future_e - prev_e,
-                    e_barr,
-                    self.temperature,
-                );
+                let mmove =
+                    listdict::Move::new(pos.1, pos.0, future_e - prev_e, e_barr, self.temperature);
+                assert!(self.atom_pos[pos.1 as usize].occ != 255);
+                self.possible_moves
+                    .update_k_if_item_exists(ItemEnum::Move(mmove));
+                // self.possible_moves.update_k_if_move_exists(
+                //     pos.1,
+                //     pos.0,
+                //     listdict::tst_rate_calculation(future_e - prev_e, e_barr, self.temperature),
+                // );
             }
         }
         //     }
@@ -1084,10 +1095,13 @@ impl Simulation {
     }
 
     fn update_possible_moves(&mut self, move_from: u32, move_to: u32) {
-        self.possible_moves.remove_item(move_from, move_to);
+        self.possible_moves.remove_move(move_from, move_to);
+        if self.possible_moves.remove_move(move_from, move_to) {
+            panic!("removed twice");
+        };
         for nn_to_from in self.gridstructure.nn[&move_from] {
             if self.atom_pos[nn_to_from as usize].occ == 255 {
-                self.possible_moves.remove_item(move_from, nn_to_from);
+                self.possible_moves.remove_move(move_from, nn_to_from);
             }
             if self.atom_pos[nn_to_from as usize].occ != 255
                 && self.atom_pos[nn_to_from as usize].occ != 100
@@ -1100,14 +1114,16 @@ impl Simulation {
                         self.atom_pos[nn_to_from as usize].occ,
                     );
                     let e_barr = alpha_energy::e_barrier(prev_e, future_e);
-                    assert!(self.atom_pos[nn_to_from as usize].occ != 100);
-                    self.possible_moves.add_item(
+                    assert!(self.atom_pos[move_to as usize].occ != 255);
+                    let mmove = listdict::Move::new(
                         nn_to_from,
                         move_from,
                         future_e - prev_e,
                         e_barr,
                         self.temperature,
                     );
+                    assert!(self.atom_pos[nn_to_from as usize].occ != 255);
+                    self.possible_moves.cond_add_item(ItemEnum::Move(mmove));
                 }
             }
         }
@@ -1116,7 +1132,7 @@ impl Simulation {
             if self.atom_pos[nn_to_to as usize].occ != 255
                 && self.atom_pos[nn_to_to as usize].occ != 100
             {
-                self.possible_moves.remove_item(nn_to_to, move_to);
+                self.possible_moves.remove_move(nn_to_to, move_to);
             }
             if self.atom_pos[nn_to_to as usize].occ == 255 {
                 // greater than one because of neighbor moving in this spot
@@ -1127,14 +1143,16 @@ impl Simulation {
                         self.atom_pos[move_to as usize].occ,
                     );
                     let e_barr = alpha_energy::e_barrier(prev_e, future_e);
-                    assert!(self.atom_pos[move_to as usize].occ != 100);
-                    self.possible_moves.add_item(
+                    assert!(self.atom_pos[move_to as usize].occ != 255);
+                    let mmove = listdict::Move::new(
                         move_to,
                         nn_to_to,
-                        future_e - prev_e,
                         e_barr,
+                        future_e - prev_e,
                         self.temperature,
                     );
+                    assert!(self.atom_pos[move_to as usize].occ != 255);
+                    self.possible_moves.cond_add_item(ItemEnum::Move(mmove));
                 }
             }
         }
@@ -1145,51 +1163,88 @@ impl Simulation {
             no_int_nn_from_move(move_from, move_to, &self.gridstructure.nn_pair_no_intersec);
         match how2 {
             AddRemoveHow::Remove(_) | AddRemoveHow::Exchange(_, _) => {
-                self.add_or_remove.remove_item(move_from);
-                self.add_or_remove.cond_add_item(
+                self.possible_moves.remove_add_remove(move_from);
+                let pos_change = add_remove_list::AtomPosChange::new(
                     move_to,
                     self.atom_pos[move_to as usize].cn_metal as u8,
                     self.atom_pos[move_to as usize].occ as u8,
                     self.temperature,
-                    &how2,
+                    how2.clone(),
                 );
+                if let Some(pos_change) = pos_change {
+                    self.possible_moves
+                        .cond_add_item(ItemEnum::AddOrRemove(pos_change));
+                }
                 for x in from_change {
-                    self.add_or_remove.cond_update_cn(
+                    let pos_change = add_remove_list::AtomPosChange::new(
                         x,
                         self.atom_pos[x as usize].cn_metal as u8,
+                        self.atom_pos[x as usize].occ as u8,
                         self.temperature,
+                        how2.clone(),
                     );
+                    if let Some(pos_change) = pos_change {
+                        self.possible_moves
+                            .update_k_if_item_exists(ItemEnum::AddOrRemove(pos_change));
+                    }
                 }
                 for x in to_change {
-                    self.add_or_remove.cond_update_cn(
+                    let pos_change = add_remove_list::AtomPosChange::new(
                         x,
                         self.atom_pos[x as usize].cn_metal as u8,
+                        self.atom_pos[x as usize].occ as u8,
                         self.temperature,
+                        how2.clone(),
                     );
+                    if let Some(pos_change) = pos_change {
+                        self.possible_moves
+                            .update_k_if_item_exists(ItemEnum::AddOrRemove(pos_change));
+                    }
                 }
             }
             AddRemoveHow::Add(_) => {
-                self.add_or_remove.remove_item(move_to);
-                self.add_or_remove.cond_add_item(
+                self.possible_moves.remove_add_remove(move_to);
+                let pos_change = add_remove_list::AtomPosChange::new(
                     move_from,
                     self.atom_pos[move_from as usize].cn_metal as u8,
                     self.atom_pos[move_from as usize].occ as u8,
                     self.temperature,
-                    &how2,
+                    how2.clone(),
                 );
-                for x in from_change {
-                    self.add_or_remove.cond_update_cn(
-                        x,
-                        self.atom_pos[x as usize].cn_metal as u8,
-                        self.temperature,
+                if let Some(pos_change) = pos_change {
+                    self.possible_moves.cond_add_item(
+                        ItemEnum::AddOrRemove(pos_change), // move_from,
+                                                           // self.atom_pos[move_from as usize].cn_metal as u8,
+                                                           // self.atom_pos[move_from as usize].occ as u8,
+                                                           // self.temperature,
+                                                           // &how2,
                     );
                 }
-                for x in to_change {
-                    self.add_or_remove.cond_update_cn(
+                for x in from_change {
+                    let pos_change = add_remove_list::AtomPosChange::new(
                         x,
                         self.atom_pos[x as usize].cn_metal as u8,
+                        self.atom_pos[x as usize].occ as u8,
                         self.temperature,
+                        how2.clone(),
                     );
+                    if let Some(pos_change) = pos_change {
+                        self.possible_moves
+                            .update_k_if_item_exists(ItemEnum::AddOrRemove(pos_change));
+                    }
+                }
+                for x in to_change {
+                    let pos_change = add_remove_list::AtomPosChange::new(
+                        x,
+                        self.atom_pos[x as usize].cn_metal as u8,
+                        self.atom_pos[x as usize].occ as u8,
+                        self.temperature,
+                        how2.clone(),
+                    );
+                    if let Some(pos_change) = pos_change {
+                        self.possible_moves
+                            .update_k_if_item_exists(ItemEnum::AddOrRemove(pos_change));
+                    }
                 }
             }
             AddRemoveHow::RemoveAndAdd(_, _) => todo!(),
