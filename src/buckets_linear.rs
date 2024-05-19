@@ -46,6 +46,7 @@ pub struct Bucket {
 
 impl Bucket {
     fn update_k_if_edit_counter(&mut self, new_k: f64) {
+        self.edit_counter += 0;
         if self.own_k * 0.2 <= new_k || self.own_k < 0.001 || self.edit_counter >= MAX_EDIT_COUNTER
         {
             self.edit_counter = 0;
@@ -111,11 +112,11 @@ struct ItemToPosition {
 
 #[derive(Clone, Debug)]
 pub struct Buckets {
+    pub edit_counter: i32,
     pub bucket_power_to_pos: HashMap<i32, usize, ahash::RandomState>,
     pub move_to_position: HashMap<u64, ItemIndexes, ahash::RandomState>,
     pub add_remove_to_position: HashMap<u64, ItemIndexes, ahash::RandomState>,
     pub total_k: f64,
-    pub buckets_count: u32,
     pub buckets_list: Vec<Bucket>,
 }
 
@@ -126,17 +127,24 @@ impl Buckets {
         let add_remove_to_position: HashMap<u64, ItemIndexes, ahash::RandomState> =
             HashMap::default();
         Buckets {
+            edit_counter: 0,
             bucket_power_to_pos,
             move_to_position,
             add_remove_to_position,
             total_k: 0.,
-            buckets_count: 0,
             buckets_list: Vec::new(),
         }
     }
 
-    fn update_total_k_of_buckets(&mut self) {
-        self.total_k = self.buckets_list.iter().map(|item| item.own_k).sum::<f64>();
+    fn update_total_k_of_buckets(&mut self, new_k: f64) {
+        self.edit_counter += 1;
+        if self.total_k * 0.2 <= new_k
+            || self.total_k < 0.001
+            || self.edit_counter >= MAX_EDIT_COUNTER
+        {
+            self.edit_counter = 0;
+            self.total_k = self.buckets_list.iter().map(|item| item.own_k).sum::<f64>();
+        }
     }
 
     pub fn cond_add_item(&mut self, item: ItemEnum) {
@@ -167,17 +175,15 @@ impl Buckets {
         self.total_k += k;
         self.buckets_list[bucket_index].own_k += k;
         self.buckets_list[bucket_index].items.push(item);
-        self.buckets_list[bucket_index].edit_counter += 1;
         self.buckets_list[bucket_index].update_k_if_edit_counter(k);
-        self.update_total_k_of_buckets();
+        self.update_total_k_of_buckets(k);
     }
 
     pub fn cond_add_bucket(&mut self, power_of_k: i32) -> usize {
         if let Some(bucket_index) = self.bucket_power_to_pos.get(&power_of_k) {
             return *bucket_index;
         }
-        self.buckets_count += 1;
-        println!("bucket count {}", self.buckets_count);
+        println!("bucket count {}", self.buckets_list.len());
         let bucket = Bucket {
             bucket_power: power_of_k,
             ..Default::default()
@@ -201,25 +207,21 @@ impl Buckets {
             let bucket = &mut self.buckets_list[*bucket_index];
 
             let poped_item = bucket.items.pop().unwrap();
-            if bucket.items.len() != item_indexes.vec_index {
+            let k = if bucket.items.len() != item_indexes.vec_index {
                 let old_item =
                     std::mem::replace(&mut bucket.items[item_indexes.vec_index], poped_item);
                 self.move_to_position.insert(
                     (bucket.items[item_indexes.vec_index].get_id()),
                     item_indexes,
                 );
-                self.total_k -= old_item.get_k();
-                bucket.own_k -= old_item.get_k();
-                bucket.edit_counter += 1;
-                bucket.update_k_if_edit_counter(old_item.get_k());
-                self.update_total_k_of_buckets();
+                old_item.get_k()
             } else {
-                self.total_k -= poped_item.get_k();
-                bucket.own_k -= poped_item.get_k();
-                bucket.edit_counter += 1;
-                bucket.update_k_if_edit_counter(poped_item.get_k());
-                self.update_total_k_of_buckets();
-            }
+                poped_item.get_k()
+            };
+            self.total_k -= k;
+            bucket.own_k -= k;
+            bucket.update_k_if_edit_counter(k);
+            self.update_total_k_of_buckets(k);
             return true;
         }
         false
@@ -243,24 +245,14 @@ impl Buckets {
                     item_indexes,
                 );
                 old_item.get_k()
-                // self.total_k -= old_item.get_k();
-                // bucket.own_k -= old_item.get_k();
-                // bucket.edit_counter += 1;
-                // bucket.update_k_if_edit_counter(old_item.get_k());
-                // self.update_total_k_of_buckets();
             } else {
                 poped_item.get_k()
-                // self.total_k -= poped_item.get_k();
-                // bucket.own_k -= poped_item.get_k();
-                // bucket.edit_counter += 1;
-                // bucket.update_k_if_edit_counter(poped_item.get_k());
-                // self.update_total_k_of_buckets();
             };
             self.total_k -= k;
             bucket.own_k -= k;
             bucket.edit_counter += 1;
             bucket.update_k_if_edit_counter(k);
-            self.update_total_k_of_buckets();
+            self.update_total_k_of_buckets(k);
         }
     }
 
