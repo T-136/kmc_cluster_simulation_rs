@@ -45,8 +45,8 @@ pub struct Bucket {
 }
 
 impl Bucket {
-    fn update_k_if_edit_counter(&mut self, new_k: f64) {
-        self.edit_counter += 0;
+    fn cond_update_bucket_k(&mut self, new_k: f64) {
+        self.edit_counter += 1;
         if self.own_k * 0.2 <= new_k || self.own_k < 0.001 || self.edit_counter >= MAX_EDIT_COUNTER
         {
             self.edit_counter = 0;
@@ -136,7 +136,8 @@ impl Buckets {
         }
     }
 
-    fn update_total_k_of_buckets(&mut self, new_k: f64) {
+    fn cond_update_ks(&mut self, new_k: f64, bucket_index: usize) {
+        self.buckets_list[bucket_index].cond_update_bucket_k(new_k);
         self.edit_counter += 1;
         if self.total_k * 0.2 <= new_k
             || self.total_k < 0.001
@@ -175,8 +176,7 @@ impl Buckets {
         self.total_k += k;
         self.buckets_list[bucket_index].own_k += k;
         self.buckets_list[bucket_index].items.push(item);
-        self.buckets_list[bucket_index].update_k_if_edit_counter(k);
-        self.update_total_k_of_buckets(k);
+        self.cond_update_ks(k, bucket_index);
     }
 
     pub fn cond_add_bucket(&mut self, power_of_k: i32) -> usize {
@@ -220,8 +220,7 @@ impl Buckets {
             };
             self.total_k -= k;
             bucket.own_k -= k;
-            bucket.update_k_if_edit_counter(k);
-            self.update_total_k_of_buckets(k);
+            self.cond_update_ks(k, *bucket_index);
             return true;
         }
         false
@@ -250,9 +249,7 @@ impl Buckets {
             };
             self.total_k -= k;
             bucket.own_k -= k;
-            bucket.edit_counter += 1;
-            bucket.update_k_if_edit_counter(k);
-            self.update_total_k_of_buckets(k);
+            self.cond_update_ks(k, *bucket_index);
         }
     }
 
