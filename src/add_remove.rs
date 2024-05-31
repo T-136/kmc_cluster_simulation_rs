@@ -1,18 +1,35 @@
+use crate::{add_remove_list, buckets_linear};
+
 pub use super::alpha_energy;
 
+// pub const ADD_ATOM: bool = true;
+// pub const REMOVE_ATOM: bool = false;
+// pub const EXCHANGE_ATOM: bool = false;
+// pub const CHANGE_TYPES: [bool; 3] = [ADD_ATOM, REMOVE_ATOM, EXCHANGE_ATOM];
+pub const ADD_ATOM_TYPE: u8 = 0;
+pub const REMOVE_ATOM_TYPE: u8 = 1;
+
 #[derive(Clone, Debug)]
-pub enum AddRemoveHow {
+pub enum AtomChangeHow {
     // atom_type_index
-    Add(u8),
-    Remove(u8),
-    Exchange(u8, u8),
-    RemoveAndAdd(u8, u8),
+    Add = 1,
+    Remove = 2,
+    Exchange = 3,
+    RemoveAndAdd = 4,
+}
+
+impl AtomChangeHow {
+    fn get_hash_pos_enum_iter(pos: u32) -> impl std::iter::Iterator<Item = u64> {
+        (0..5)
+            .into_iter()
+            .map(move |i| pos as u64 + ((i as u64) << 32))
+    }
 }
 
 impl crate::Simulation {
-    pub fn change_item(&mut self, pos: u32, how: &AddRemoveHow, is_recording_sections: bool) {
+    pub fn change_item(&mut self, pos: u32, how: &AtomChangeHow, is_recording_sections: bool) {
         match how {
-            AddRemoveHow::Remove(remove_atom_type) => {
+            AtomChangeHow::Remove => {
                 self.atom_pos[pos as usize].occ = 255;
                 self.onlyocc.remove(&pos);
 
@@ -36,7 +53,7 @@ impl crate::Simulation {
                         }
                     }
                     self.atom_pos[o as usize].cn_metal -= 1;
-                    self.atom_pos[o as usize].nn_atom_type_count[*remove_atom_type as usize] -= 1;
+                    self.atom_pos[o as usize].nn_atom_type_count[REMOVE_ATOM_TYPE as usize] -= 1;
                 }
 
                 if super::SAVE_ENTIRE_SIM || is_recording_sections {
@@ -48,8 +65,8 @@ impl crate::Simulation {
                     // self.cn_dict[self.atom_pos[move_from as usize].cn_metal] -= 1;
                 }
             }
-            AddRemoveHow::Exchange(remove_atom_type, add_atom_type) => {
-                self.atom_pos[pos as usize].occ = *add_atom_type;
+            AtomChangeHow::Exchange => {
+                self.atom_pos[pos as usize].occ = ADD_ATOM_TYPE;
 
                 for o in self.gridstructure.nn[&pos] {
                     if (super::SAVE_ENTIRE_SIM || is_recording_sections)
@@ -71,12 +88,12 @@ impl crate::Simulation {
                         }
                     }
                     // self.atom_pos[o as usize].cn_metal -= 1;
-                    self.atom_pos[o as usize].nn_atom_type_count[*remove_atom_type as usize] -= 1;
-                    self.atom_pos[o as usize].nn_atom_type_count[*add_atom_type as usize] += 1;
+                    self.atom_pos[o as usize].nn_atom_type_count[REMOVE_ATOM_TYPE as usize] -= 1;
+                    self.atom_pos[o as usize].nn_atom_type_count[ADD_ATOM_TYPE as usize] += 1;
                 }
             }
-            AddRemoveHow::Add(add_atom_type) => {
-                self.atom_pos[pos as usize].occ = *add_atom_type;
+            AtomChangeHow::Add => {
+                self.atom_pos[pos as usize].occ = ADD_ATOM_TYPE;
 
                 self.onlyocc.insert(pos);
 
@@ -115,7 +132,7 @@ impl crate::Simulation {
                     }
 
                     self.atom_pos[o as usize].cn_metal += 1;
-                    self.atom_pos[o as usize].nn_atom_type_count[*add_atom_type as usize] += 1;
+                    self.atom_pos[o as usize].nn_atom_type_count[ADD_ATOM_TYPE as usize] += 1;
                 }
 
                 if super::SAVE_ENTIRE_SIM || is_recording_sections {
@@ -129,7 +146,7 @@ impl crate::Simulation {
 
                 // self.total_energy += self.e_change_add_move(pos, *add_atom_type);
             }
-            AddRemoveHow::RemoveAndAdd(_, _) => todo!(),
+            AtomChangeHow::RemoveAndAdd => todo!(),
         }
 
         // println!("possible moves: {:?}", self.possible_moves.moves);
@@ -137,11 +154,11 @@ impl crate::Simulation {
         self.total_energy += self.e_change(pos, how);
     }
 
-    fn e_change(&self, pos: u32, how: &AddRemoveHow) -> f64 {
+    fn e_change(&self, pos: u32, how: &AtomChangeHow) -> f64 {
         let mut pos_nn_atom_type_no_tst = self.atom_pos[pos as usize].nn_atom_type_count;
         let mut energy = 0.;
         match how {
-            AddRemoveHow::Remove(remove_atom_type) => {
+            AtomChangeHow::Remove => {
                 energy -= self.alphas.e_one_atom(
                     self.atom_pos[pos as usize].cn_metal,
                     // self.atom_pos[move_from as usize].nn_atom_type_count,
@@ -158,12 +175,12 @@ impl crate::Simulation {
                             None
                         }
                     }),
-                    *remove_atom_type,
+                    REMOVE_ATOM_TYPE,
                     0,
                     0,
                 );
             }
-            AddRemoveHow::Exchange(remove_atom_type, add_atom_type) => {
+            AtomChangeHow::Exchange => {
                 energy -= self.alphas.e_one_atom(
                     self.atom_pos[pos as usize].cn_metal,
                     // self.atom_pos[move_from as usize].nn_atom_type_count,
@@ -180,7 +197,7 @@ impl crate::Simulation {
                             None
                         }
                     }),
-                    *remove_atom_type,
+                    REMOVE_ATOM_TYPE,
                     0,
                     0,
                 );
@@ -200,12 +217,12 @@ impl crate::Simulation {
                             None
                         }
                     }),
-                    *add_atom_type,
+                    ADD_ATOM_TYPE,
                     0,
                     0,
                 );
             }
-            AddRemoveHow::Add(add_atom_type) => {
+            AtomChangeHow::Add => {
                 let pos_nn_atom_type_ = self.atom_pos[pos as usize].nn_atom_type_count;
                 energy += self.alphas.e_one_atom(
                     self.atom_pos[pos as usize].cn_metal,
@@ -222,20 +239,20 @@ impl crate::Simulation {
                             None
                         }
                     }),
-                    *add_atom_type,
+                    ADD_ATOM_TYPE,
                     0,
                     0,
                 )
             }
-            AddRemoveHow::RemoveAndAdd(_, _) => todo!(),
+            AtomChangeHow::RemoveAndAdd => todo!(),
         }
 
         energy
     }
 
-    pub fn redox_update_possibel_moves(&mut self, pos: u32, how: &AddRemoveHow, temperature: f64) {
+    pub fn redox_update_possibel_moves(&mut self, pos: u32, how: &AtomChangeHow, temperature: f64) {
         match how {
-            AddRemoveHow::Remove(remove_atom_index) => {
+            AtomChangeHow::Remove => {
                 for nn_to_pos in self.gridstructure.nn[&pos] {
                     if self.atom_pos[nn_to_pos as usize].occ == 255 {
                         self.possible_moves.remove_move(pos, nn_to_pos);
@@ -266,28 +283,9 @@ impl crate::Simulation {
                     }
                 }
             }
-            AddRemoveHow::Exchange(add_atom_index, remove_atom_index) => {
-                for nn_to_pos in self.gridstructure.nn[&pos] {
-                    if self.atom_pos[nn_to_pos as usize].occ == 255 {
-                        let (prev_e, future_e) = self.calc_energy_change_by_move(
-                            pos,
-                            nn_to_pos,
-                            self.atom_pos[pos as usize].occ,
-                        );
-                        let e_barr = alpha_energy::e_barrier(prev_e, future_e);
-                        let mmove = super::listdict::Move::new(
-                            nn_to_pos,
-                            pos,
-                            future_e - prev_e,
-                            e_barr,
-                            self.temperature,
-                        );
-                        self.possible_moves
-                            .update_k_if_item_exists(crate::ItemEnum::Move(mmove));
-                    }
-                }
-            }
-            AddRemoveHow::Add(_) => {
+            AtomChangeHow::Exchange => todo!(),
+
+            AtomChangeHow::Add => {
                 for nn_to_atom in self.gridstructure.nn[&pos] {
                     if self.atom_pos[nn_to_atom as usize].occ != 255
                         && self.atom_pos[nn_to_atom as usize].occ != 100
@@ -317,7 +315,7 @@ impl crate::Simulation {
                     }
                 }
             }
-            AddRemoveHow::RemoveAndAdd(_, _) => todo!(),
+            AtomChangeHow::RemoveAndAdd => todo!(),
         }
     }
 
@@ -337,12 +335,12 @@ impl crate::Simulation {
                 } else {
                     continue;
                 };
-                println!(
-                    "{} {} {}",
-                    self.atom_pos[full as usize].cn_metal,
-                    self.atom_pos[empty as usize].cn_metal,
-                    self.atom_pos[full as usize].occ
-                );
+                // println!(
+                //     "{} {} {}",
+                //     self.atom_pos[full as usize].cn_metal,
+                //     self.atom_pos[empty as usize].cn_metal,
+                //     self.atom_pos[full as usize].occ
+                // );
                 let (prev_e, future_e) =
                     self.calc_energy_change_by_move(full, empty, self.atom_pos[full as usize].occ);
                 let e_barr = alpha_energy::e_barrier(prev_e, future_e);
@@ -359,9 +357,9 @@ impl crate::Simulation {
         }
     }
 
-    pub fn redox_update_add_remove(&mut self, pos: u32, how: &AddRemoveHow) {
+    pub fn redox_update_add_remove(&mut self, pos: u32, how: &AtomChangeHow) {
         match how {
-            AddRemoveHow::Remove(_) => {
+            AtomChangeHow::Remove => {
                 self.possible_moves.remove_add_remove(pos);
                 for x in self.gridstructure.nn[&pos] {
                     let pos = super::add_remove_list::AtomPosChange::new(
@@ -377,10 +375,10 @@ impl crate::Simulation {
                     }
                 }
             }
-            AddRemoveHow::Exchange(_, _) => {
+            AtomChangeHow::Exchange => {
                 self.possible_moves.remove_add_remove(pos);
             }
-            AddRemoveHow::Add(atom_type) => {
+            AtomChangeHow::Add => {
                 self.possible_moves.remove_add_remove(pos);
                 for neighbor in self.gridstructure.nn[&pos] {
                     let pos = super::add_remove_list::AtomPosChange::new(
@@ -403,7 +401,7 @@ impl crate::Simulation {
                     // );
                 }
             }
-            AddRemoveHow::RemoveAndAdd(_, _) => todo!(),
+            AtomChangeHow::RemoveAndAdd => todo!(),
         }
     }
 }

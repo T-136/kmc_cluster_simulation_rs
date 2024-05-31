@@ -1,4 +1,4 @@
-use add_remove::AddRemoveHow;
+use add_remove::AtomChangeHow;
 use anyhow;
 use core::panic;
 use csv::Writer;
@@ -49,8 +49,8 @@ const GRID_SIZE: [u32; 3] = [30, 30, 30];
 const SAVE_ENTIRE_SIM: bool = true;
 
 // const how: add_remove::AddRemoveHow = add_remove::AddRemoveHow::RemoveAndAdd(1, 0);
-// const how: add_remove::AddRemoveHow = add_remove::AddRemoveHow::Remove(1);
-const how: add_remove::AddRemoveHow = add_remove::AddRemoveHow::Add(0);
+// const how: add_remove::AtomChangeHow = add_remove::AtomChangeHow::Remove;
+const how: add_remove::AtomChangeHow = add_remove::AtomChangeHow::Add;
 
 #[derive(Clone, Default)]
 pub struct AtomPosition {
@@ -364,6 +364,13 @@ impl Simulation {
         // }
 
         for (i, o) in self.atom_pos.iter().enumerate() {
+            // Simulation::add_atom_changes(
+            //     &mut self.possible_moves,
+            //     i as u32,
+            //     o.cn_metal as u8,
+            //     o.occ,
+            //     self.temperature,
+            // );
             let pos_change = add_remove_list::AtomPosChange::new(
                 i as u32,
                 o.cn_metal as u8,
@@ -425,15 +432,15 @@ impl Simulation {
                     self.possible_moves.total_k
                 );
                 // println!("poss addremove: {:?}", self.add_or_remove.atoms);
-                println!(
-                    "buckets: {} {:?} ",
-                    self.possible_moves.buckets_list.len(),
-                    self.possible_moves
-                        .buckets_list
-                        .iter()
-                        .map(|bucket| (bucket.bucket_power, bucket.own_k))
-                        .collect::<Vec<(i32, f64)>>()
-                );
+                // println!(
+                //     "buckets: {} {:?} ",
+                //     self.possible_moves.buckets_list.len(),
+                //     self.possible_moves
+                //         .buckets_list
+                //         .iter()
+                //         .map(|bucket| (bucket.bucket_power, bucket.own_k))
+                //         .collect::<Vec<(i32, f64)>>()
+                // );
             }
             let is_recording_sections = iiter * self.optimization_cut_off_fraction[1]
                 >= self.niter * self.optimization_cut_off_fraction[0];
@@ -491,6 +498,7 @@ impl Simulation {
                     }
                 }
                 ItemEnum::AddOrRemove(change) => {
+                    println!("change something");
                     self.change_item(change.pos, &how, is_recording_sections);
                     self.redox_update_total_k(change.pos);
                     self.redox_update_possibel_moves(change.pos, &how, self.temperature);
@@ -1096,9 +1104,6 @@ impl Simulation {
 
     fn update_possible_moves(&mut self, move_from: u32, move_to: u32) {
         self.possible_moves.remove_move(move_from, move_to);
-        if self.possible_moves.remove_move(move_from, move_to) {
-            panic!("removed twice");
-        };
         for nn_to_from in self.gridstructure.nn[&move_from] {
             if self.atom_pos[nn_to_from as usize].occ == 255 {
                 self.possible_moves.remove_move(move_from, nn_to_from);
@@ -1158,97 +1163,109 @@ impl Simulation {
         }
     }
 
-    fn update_add_remove(&mut self, move_from: u32, move_to: u32, how2: &AddRemoveHow) {
+    fn update_add_remove(&mut self, move_from: u32, move_to: u32, how2: &AtomChangeHow) {
         let (from_change, to_change, inter) =
             no_int_nn_from_move(move_from, move_to, &self.gridstructure.nn_pair_no_intersec);
-        match how2 {
-            AddRemoveHow::Remove(_) | AddRemoveHow::Exchange(_, _) => {
+        // if add_remove::REMOVE_ATOM || add_remove::EXCHANGE_ATOM {
+        let pos_change = match how {
+            AtomChangeHow::Add => {
+                self.possible_moves.remove_add_remove(move_to);
+                add_remove_list::AtomPosChange::new(
+                    move_from,
+                    self.atom_pos[move_to as usize].cn_metal as u8,
+                    self.atom_pos[move_to as usize].occ as u8,
+                    self.temperature,
+                    how2.clone(),
+                )
+            }
+            AtomChangeHow::Remove => {
                 self.possible_moves.remove_add_remove(move_from);
-                let pos_change = add_remove_list::AtomPosChange::new(
+                add_remove_list::AtomPosChange::new(
                     move_to,
                     self.atom_pos[move_to as usize].cn_metal as u8,
                     self.atom_pos[move_to as usize].occ as u8,
                     self.temperature,
                     how2.clone(),
-                );
-                if let Some(pos_change) = pos_change {
-                    self.possible_moves
-                        .cond_add_item(ItemEnum::AddOrRemove(pos_change));
-                }
-                for x in from_change {
-                    let pos_change = add_remove_list::AtomPosChange::new(
-                        x,
-                        self.atom_pos[x as usize].cn_metal as u8,
-                        self.atom_pos[x as usize].occ as u8,
-                        self.temperature,
-                        how2.clone(),
-                    );
-                    if let Some(pos_change) = pos_change {
-                        self.possible_moves
-                            .update_k_if_item_exists(ItemEnum::AddOrRemove(pos_change));
-                    }
-                }
-                for x in to_change {
-                    let pos_change = add_remove_list::AtomPosChange::new(
-                        x,
-                        self.atom_pos[x as usize].cn_metal as u8,
-                        self.atom_pos[x as usize].occ as u8,
-                        self.temperature,
-                        how2.clone(),
-                    );
-                    if let Some(pos_change) = pos_change {
-                        self.possible_moves
-                            .update_k_if_item_exists(ItemEnum::AddOrRemove(pos_change));
-                    }
-                }
+                )
             }
-            AddRemoveHow::Add(_) => {
-                self.possible_moves.remove_add_remove(move_to);
-                let pos_change = add_remove_list::AtomPosChange::new(
-                    move_from,
-                    self.atom_pos[move_from as usize].cn_metal as u8,
-                    self.atom_pos[move_from as usize].occ as u8,
-                    self.temperature,
-                    how2.clone(),
-                );
-                if let Some(pos_change) = pos_change {
-                    self.possible_moves.cond_add_item(
-                        ItemEnum::AddOrRemove(pos_change), // move_from,
-                                                           // self.atom_pos[move_from as usize].cn_metal as u8,
-                                                           // self.atom_pos[move_from as usize].occ as u8,
-                                                           // self.temperature,
-                                                           // &how2,
-                    );
-                }
-                for x in from_change {
-                    let pos_change = add_remove_list::AtomPosChange::new(
-                        x,
-                        self.atom_pos[x as usize].cn_metal as u8,
-                        self.atom_pos[x as usize].occ as u8,
-                        self.temperature,
-                        how2.clone(),
-                    );
-                    if let Some(pos_change) = pos_change {
-                        self.possible_moves
-                            .update_k_if_item_exists(ItemEnum::AddOrRemove(pos_change));
-                    }
-                }
-                for x in to_change {
-                    let pos_change = add_remove_list::AtomPosChange::new(
-                        x,
-                        self.atom_pos[x as usize].cn_metal as u8,
-                        self.atom_pos[x as usize].occ as u8,
-                        self.temperature,
-                        how2.clone(),
-                    );
-                    if let Some(pos_change) = pos_change {
-                        self.possible_moves
-                            .update_k_if_item_exists(ItemEnum::AddOrRemove(pos_change));
-                    }
-                }
-            }
-            AddRemoveHow::RemoveAndAdd(_, _) => todo!(),
+            AtomChangeHow::Exchange => todo!(),
+            AtomChangeHow::RemoveAndAdd => todo!(),
+        };
+        if let Some(pos_change) = pos_change {
+            self.possible_moves
+                .cond_add_item(ItemEnum::AddOrRemove(pos_change));
         }
+        for x in from_change {
+            let pos_change = add_remove_list::AtomPosChange::new(
+                x,
+                self.atom_pos[x as usize].cn_metal as u8,
+                self.atom_pos[x as usize].occ as u8,
+                self.temperature,
+                how2.clone(),
+            );
+            if let Some(pos_change) = pos_change {
+                self.possible_moves
+                    .update_k_if_item_exists(ItemEnum::AddOrRemove(pos_change));
+            }
+        }
+        for x in to_change {
+            let pos_change = add_remove_list::AtomPosChange::new(
+                x,
+                self.atom_pos[x as usize].cn_metal as u8,
+                self.atom_pos[x as usize].occ as u8,
+                self.temperature,
+                how2.clone(),
+            );
+            if let Some(pos_change) = pos_change {
+                self.possible_moves
+                    .update_k_if_item_exists(ItemEnum::AddOrRemove(pos_change));
+            }
+        }
+        // } else if add_remove::ADD_ATOM {
+        //     self.possible_moves.remove_add_remove(move_to);
+        //     let pos_change = add_remove_list::AtomPosChange::new(
+        //         move_from,
+        //         self.atom_pos[move_from as usize].cn_metal as u8,
+        //         self.atom_pos[move_from as usize].occ as u8,
+        //         self.temperature,
+        //         how2.clone(),
+        //     );
+        //     if let Some(pos_change) = pos_change {
+        //         self.possible_moves.cond_add_item(
+        //             ItemEnum::AddOrRemove(pos_change), // move_from,
+        //                                                // self.atom_pos[move_from as usize].cn_metal as u8,
+        //                                                // self.atom_pos[move_from as usize].occ as u8,
+        //                                                // self.temperature,
+        //                                                // &how2,
+        //         );
+        //     }
+        //     for x in from_change {
+        //         let pos_change = add_remove_list::AtomPosChange::new(
+        //             x,
+        //             self.atom_pos[x as usize].cn_metal as u8,
+        //             self.atom_pos[x as usize].occ as u8,
+        //             self.temperature,
+        //             how2.clone(),
+        //         );
+        //         if let Some(pos_change) = pos_change {
+        //             self.possible_moves
+        //                 .update_k_if_item_exists(ItemEnum::AddOrRemove(pos_change));
+        //         }
+        //     }
+        //     for x in to_change {
+        //         let pos_change = add_remove_list::AtomPosChange::new(
+        //             x,
+        //             self.atom_pos[x as usize].cn_metal as u8,
+        //             self.atom_pos[x as usize].occ as u8,
+        //             self.temperature,
+        //             how2.clone(),
+        //         );
+        //         if let Some(pos_change) = pos_change {
+        //             self.possible_moves
+        //                 .update_k_if_item_exists(ItemEnum::AddOrRemove(pos_change));
+        //         }
+        //     }
+        // }
     }
 
     fn cond_snap_and_heat_map(&mut self, iiter: &u64) {

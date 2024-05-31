@@ -2,6 +2,7 @@ use core::panic;
 use rand::distributions::{Distribution, Uniform};
 use rand::rngs::SmallRng;
 use std::collections::HashMap;
+use std::mem;
 use std::{cell::RefCell, rc::Rc};
 
 use super::add_remove_list;
@@ -19,9 +20,13 @@ impl ItemEnum {
     fn get_id(&self) -> u64 {
         match self {
             ItemEnum::Move(mmove) => (mmove.from as u64 + ((mmove.to as u64) << 32)),
-            ItemEnum::AddOrRemove(add_or_remove) => add_or_remove.pos as u64,
+            ItemEnum::AddOrRemove(add_or_remove) => {
+                // add_or_remove.pos as u64 + ((add_or_remove.how as u64) << 32)
+                add_or_remove.pos as u64
+            }
         }
     }
+
     pub fn get_k(&self) -> f64 {
         match self {
             ItemEnum::Move(mmove) => mmove.k,
@@ -114,7 +119,9 @@ struct ItemToPosition {
 pub struct Buckets {
     pub edit_counter: i32,
     pub bucket_power_to_pos: HashMap<i32, usize, ahash::RandomState>,
+    // key from + (to << 32)
     pub move_to_position: HashMap<u64, ItemIndexes, ahash::RandomState>,
+    // key pos + (enum discrimenent << 32)
     pub add_remove_to_position: HashMap<u64, ItemIndexes, ahash::RandomState>,
     pub total_k: f64,
     pub buckets_list: Vec<Bucket>,
@@ -208,6 +215,15 @@ impl Buckets {
 
             let poped_item = bucket.items.pop().unwrap();
             let k = if bucket.items.len() != item_indexes.vec_index {
+                let id = poped_item.get_id();
+                match poped_item {
+                    ItemEnum::Move(_) => {
+                        self.move_to_position.insert(id, item_indexes.clone());
+                    }
+                    ItemEnum::AddOrRemove(_) => {
+                        self.add_remove_to_position.insert(id, item_indexes.clone());
+                    }
+                }
                 let old_item =
                     std::mem::replace(&mut bucket.items[item_indexes.vec_index], poped_item);
                 self.move_to_position.insert(
@@ -226,7 +242,7 @@ impl Buckets {
         false
     }
 
-    pub fn remove_add_remove(&mut self, pos: u32) {
+    pub fn remove_add_remove(&mut self, pos: u32) -> bool {
         if let Some(item_indexes) = self.add_remove_to_position.remove(&(pos as u64)) {
             let bucket_index = self
                 .bucket_power_to_pos
@@ -237,12 +253,21 @@ impl Buckets {
 
             let poped_item = bucket.items.pop().unwrap();
             let k = if bucket.items.len() != item_indexes.vec_index {
+                let id = poped_item.get_id();
+                match poped_item {
+                    ItemEnum::Move(_) => {
+                        self.move_to_position.insert(id, item_indexes.clone());
+                    }
+                    ItemEnum::AddOrRemove(_) => {
+                        self.add_remove_to_position.insert(id, item_indexes.clone());
+                    }
+                }
                 let old_item =
                     std::mem::replace(&mut bucket.items[item_indexes.vec_index], poped_item);
-                self.add_remove_to_position.insert(
-                    (bucket.items[item_indexes.vec_index].get_id()),
-                    item_indexes,
-                );
+                // self.add_remove_to_position.insert(
+                //     (bucket.items[item_indexes.vec_index].get_id()),
+                //     item_indexes,
+                // );
                 old_item.get_k()
             } else {
                 poped_item.get_k()
@@ -250,7 +275,9 @@ impl Buckets {
             self.total_k -= k;
             bucket.own_k -= k;
             self.cond_update_ks(k, *bucket_index);
+            return true;
         }
+        false
     }
 
     pub fn update_k_if_move_exists(&mut self, move_from: u32, move_to: u32, k: f64) {
@@ -293,17 +320,20 @@ impl Buckets {
                 // }
             }
             ItemEnum::AddOrRemove(add_or_remove) => {
-                if let Some(item_indexes) = self.add_remove_to_position.get(&item_id) {
-                    // let old_energy = std::mem::replace(&mut self.moves[*position].energy, new_energy);
-
-                    let bucket = &mut self.buckets_list[item_indexes.power_of_k as usize];
-
-                    // self.total_k += item.get_k();
-
-                    self.total_k -= bucket.items[item_indexes.vec_index].get_k();
-                    bucket.items[item_indexes.vec_index] = ItemEnum::AddOrRemove(add_or_remove);
-                    self.total_k += bucket.items[item_indexes.vec_index].get_k();
+                if self.remove_add_remove(add_or_remove.pos) {
+                    self.cond_add_item(ItemEnum::AddOrRemove(add_or_remove));
                 }
+                // if let Some(item_indexes) = self.add_remove_to_position.get(&item_id) {
+                //     // let old_energy = std::mem::replace(&mut self.moves[*position].energy, new_energy);
+                //
+                //     let bucket = &mut self.buckets_list[item_indexes.power_of_k as usize];
+                //
+                //     // self.total_k += item.get_k();
+                //
+                //     self.total_k -= bucket.items[item_indexes.vec_index].get_k();
+                //     bucket.items[item_indexes.vec_index] = ItemEnum::AddOrRemove(add_or_remove);
+                //     self.total_k += bucket.items[item_indexes.vec_index].get_k();
+                // }
             }
         }
     }

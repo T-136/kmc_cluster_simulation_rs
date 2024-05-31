@@ -4,15 +4,15 @@ use rand::rngs::SmallRng;
 use std::collections::HashMap;
 
 use crate::add_remove;
-use crate::add_remove::AddRemoveHow;
+use crate::add_remove::AtomChangeHow;
 
 const CN_FOR_INV: u8 = 12;
 // const E_RATIO: f64 = 0.20; 400K
-const E_RATIO_BARR: f64 = 0.1400000;
+const E_RATIO_BARR: f64 = 0.1100000;
 
 const CN_E: [f64; 13] = [0., 1., 2., 3., 4., 5., 6., 7., 8., 9., 10., 11., 12.];
 // const CN_E_ADD: [f64; 13] = [12., 11., 10., 6., 9., 8., 6., 5., 4., 3., 2., 1., 0.];
-const CN_E_ADD: [f64; 13] = [12., 11., 4., 4., 9., 9., 9., 9., 9., 9., 9., 9., 0.];
+const CN_E_ADD: [f64; 13] = [12., 11., 9., 9., 4., 9., 9., 9., 9., 9., 90., 10000., 1000.];
 
 #[derive(Clone, Debug)]
 pub struct AddOrRemove {
@@ -26,7 +26,7 @@ pub struct AddOrRemove {
 pub struct AtomPosChange {
     pub pos: u32,
     pub k: f64,
-    how: AddRemoveHow,
+    pub how: AtomChangeHow,
 }
 
 impl AtomPosChange {
@@ -35,42 +35,37 @@ impl AtomPosChange {
         cn: u8,
         atom_type: u8,
         temperature: f64,
-        how: AddRemoveHow,
+        how: AtomChangeHow,
     ) -> Option<AtomPosChange> {
-        return None;
-        if cn >= 11 {
-            return None;
-        }
+        // return None;
         match how {
-            add_remove::AddRemoveHow::Remove(remove_atom_type)
-            | add_remove::AddRemoveHow::Exchange(remove_atom_type, _) => {
-                if atom_type == remove_atom_type {
+            add_remove::AtomChangeHow::Remove | add_remove::AtomChangeHow::Exchange => {
+                if atom_type == add_remove::REMOVE_ATOM_TYPE {
                     let k = tst_rate_calculation(cn as f64 * E_RATIO_BARR, temperature);
-                    return Some(AtomPosChange {
-                        pos,
-                        k: tst_rate_calculation(cn as f64 * E_RATIO_BARR, temperature),
-                        how,
-                    });
+                    return Some(AtomPosChange { pos, k, how });
                 }
             }
-            AddRemoveHow::Add(_) => {
+            AtomChangeHow::Add => {
                 if atom_type == 255 {
                     let k = if cn == 0 {
                         tst_rate_calculation((100) as f64 * E_RATIO_BARR, temperature)
                     } else {
                         tst_rate_calculation(CN_E_ADD[cn as usize] * E_RATIO_BARR, temperature)
                     };
-                    return Some(AtomPosChange {
-                        pos,
-                        k: tst_rate_calculation(cn as f64 * E_RATIO_BARR, temperature),
-                        how,
-                    });
+                    // println!("k of change {}", k);
+                    return Some(AtomPosChange { pos, k, how });
                 }
             }
-            AddRemoveHow::RemoveAndAdd(_, _) => todo!(),
+            AtomChangeHow::RemoveAndAdd => todo!(),
         }
 
         None
+    }
+
+    fn all_enum_ids(pos: u32) -> impl Iterator<Item = u64> {
+        (1..5)
+            .into_iter()
+            .map(move |x| pos as u64 + ((x as u64) << 32))
     }
 }
 
@@ -94,15 +89,14 @@ impl AddOrRemove {
         cn: u8,
         atom_type: u8,
         temperature: f64,
-        how: &add_remove::AddRemoveHow,
+        how: &add_remove::AtomChangeHow,
     ) {
         if cn >= 11 {
             return;
         }
         match how {
-            add_remove::AddRemoveHow::Remove(remove_atom_type)
-            | add_remove::AddRemoveHow::Exchange(remove_atom_type, _) => {
-                if atom_type == *remove_atom_type {
+            add_remove::AtomChangeHow::Remove | add_remove::AtomChangeHow::Exchange => {
+                if atom_type == add_remove::REMOVE_ATOM_TYPE {
                     match self.atom_to_position.entry(pos) {
                         std::collections::hash_map::Entry::Vacant(e) => {
                             let k = tst_rate_calculation(cn as f64 * E_RATIO_BARR, temperature);
@@ -118,7 +112,7 @@ impl AddOrRemove {
                     }
                 }
             }
-            AddRemoveHow::Add(_) => {
+            AtomChangeHow::Add => {
                 if atom_type == 255 {
                     match self.atom_to_position.entry(pos) {
                         std::collections::hash_map::Entry::Vacant(e) => {
@@ -142,7 +136,7 @@ impl AddOrRemove {
                     }
                 }
             }
-            AddRemoveHow::RemoveAndAdd(_, _) => todo!(),
+            AtomChangeHow::RemoveAndAdd => todo!(),
         }
     }
 
