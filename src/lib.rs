@@ -16,7 +16,7 @@ use std::io::BufReader;
 use std::sync::Arc;
 use std::{cmp, eprint, fs, println, usize};
 
-mod add_remove_list;
+// mod add_remove_list;
 pub mod alpha_energy;
 mod atom_change;
 mod buckets_linear;
@@ -31,8 +31,6 @@ pub use alpha_energy::Alphas;
 pub use buckets_linear::ItemEnum;
 pub use grid_structure::GridStructure;
 pub use sim::Results;
-
-use crate::add_remove_list::AtomChangePos;
 
 const CN: usize = 12;
 // const GCN: usize = 54;
@@ -50,7 +48,7 @@ const SAVE_ENTIRE_SIM: bool = true;
 
 // const how: add_remove::AddRemoveHow = add_remove::AddRemoveHow::RemoveAndAdd(1, 0);
 // const how: add_remove::AtomChangeHow = add_remove::AtomChangeHow::Remove;
-const how: atom_change::AtomChangeHow = atom_change::AtomChangeHow::Add;
+const how: atom_change::AtomChangeHow = atom_change::AtomChangeHow::Remove;
 
 #[derive(Clone, Default)]
 pub struct AtomPosition {
@@ -197,7 +195,6 @@ impl Simulation {
 
         let mut total_energy: f64 = 0.;
         let possible_moves: buckets_linear::Buckets = buckets_linear::Buckets::new();
-        let add_or_remove: add_remove_list::AtomChangePos = add_remove_list::AtomChangePos::new();
 
         for o in onlyocc.iter() {
             let at_support = atom_pos[*o as usize].nn_support;
@@ -371,7 +368,7 @@ impl Simulation {
             //     o.occ,
             //     self.temperature,
             // );
-            let pos_change = add_remove_list::AtomPosChange::new(
+            let pos_change = atom_change::AtomPosChange::new(
                 i as u32,
                 o.cn_metal as u8,
                 o.occ,
@@ -1170,7 +1167,7 @@ impl Simulation {
         let pos_change = match how {
             AtomChangeHow::Add => {
                 self.possible_moves.remove_add_remove(move_to);
-                add_remove_list::AtomPosChange::new(
+                atom_change::AtomPosChange::new(
                     move_from,
                     self.atom_pos[move_to as usize].cn_metal as u8,
                     self.atom_pos[move_to as usize].occ as u8,
@@ -1180,7 +1177,7 @@ impl Simulation {
             }
             AtomChangeHow::Remove => {
                 self.possible_moves.remove_add_remove(move_from);
-                add_remove_list::AtomPosChange::new(
+                atom_change::AtomPosChange::new(
                     move_to,
                     self.atom_pos[move_to as usize].cn_metal as u8,
                     self.atom_pos[move_to as usize].occ as u8,
@@ -1196,7 +1193,7 @@ impl Simulation {
                 .cond_add_item(ItemEnum::AddOrRemove(pos_change));
         }
         for x in from_change {
-            let pos_change = add_remove_list::AtomPosChange::new(
+            let pos_change = atom_change::AtomPosChange::new(
                 x,
                 self.atom_pos[x as usize].cn_metal as u8,
                 self.atom_pos[x as usize].occ as u8,
@@ -1209,7 +1206,7 @@ impl Simulation {
             }
         }
         for x in to_change {
-            let pos_change = add_remove_list::AtomPosChange::new(
+            let pos_change = atom_change::AtomPosChange::new(
                 x,
                 self.atom_pos[x as usize].cn_metal as u8,
                 self.atom_pos[x as usize].occ as u8,

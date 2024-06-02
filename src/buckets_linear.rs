@@ -5,7 +5,7 @@ use std::collections::HashMap;
 use std::mem;
 use std::{cell::RefCell, rc::Rc};
 
-use super::add_remove_list;
+use super::atom_change;
 use super::listdict;
 
 const MAX_EDIT_COUNTER: i32 = 1000;
@@ -13,7 +13,7 @@ const MAX_EDIT_COUNTER: i32 = 1000;
 #[derive(Clone, Debug)]
 pub enum ItemEnum {
     Move(listdict::Move),
-    AddOrRemove(add_remove_list::AtomPosChange),
+    AddOrRemove(atom_change::AtomPosChange),
 }
 
 impl ItemEnum {

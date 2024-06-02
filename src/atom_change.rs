@@ -1,4 +1,4 @@
-use crate::{add_remove_list, buckets_linear};
+use crate::{atom_change, buckets_linear};
 
 pub use super::alpha_energy;
 
@@ -8,6 +8,72 @@ pub use super::alpha_energy;
 // pub const CHANGE_TYPES: [bool; 3] = [ADD_ATOM, REMOVE_ATOM, EXCHANGE_ATOM];
 pub const ADD_ATOM_TYPE: u8 = 0;
 pub const REMOVE_ATOM_TYPE: u8 = 1;
+
+const CN_FOR_INV: u8 = 12;
+// const E_RATIO: f64 = 0.20; 400K
+const E_RATIO_BARR: f64 = 0.1100000;
+
+const CN_E: [f64; 13] = [0., 1., 2., 3., 4., 5., 6., 7., 8., 9., 10., 11., 12.];
+// const CN_E_ADD: [f64; 13] = [12., 11., 10., 6., 9., 8., 6., 5., 4., 3., 2., 1., 0.];
+const CN_E_ADD: [f64; 13] = [12., 11., 9., 9., 4., 9., 9., 9., 9., 9., 90., 10000., 1000.];
+
+#[derive(Clone, Debug)]
+pub struct AtomPosChange {
+    pub pos: u32,
+    pub k: f64,
+    pub how: AtomChangeHow,
+}
+
+impl AtomPosChange {
+    pub fn new(
+        pos: u32,
+        cn: u8,
+        atom_type: u8,
+        temperature: f64,
+        how: AtomChangeHow,
+    ) -> Option<AtomPosChange> {
+        // return None;
+        match how {
+            AtomChangeHow::Remove | AtomChangeHow::Exchange => {
+                if atom_type == REMOVE_ATOM_TYPE {
+                    let k = tst_rate_calculation(cn as f64 * E_RATIO_BARR, temperature);
+                    return Some(AtomPosChange { pos, k, how });
+                }
+            }
+            AtomChangeHow::Add => {
+                if atom_type == 255 {
+                    let k = if cn == 0 {
+                        tst_rate_calculation((100) as f64 * E_RATIO_BARR, temperature)
+                    } else {
+                        tst_rate_calculation(CN_E_ADD[cn as usize] * E_RATIO_BARR, temperature)
+                    };
+                    // println!("k of change {}", k);
+                    return Some(AtomPosChange { pos, k, how });
+                }
+            }
+            AtomChangeHow::RemoveAndAdd => todo!(),
+        }
+
+        None
+    }
+
+    fn all_enum_ids(pos: u32) -> impl Iterator<Item = u64> {
+        (1..5)
+            .into_iter()
+            .map(move |x| pos as u64 + ((x as u64) << 32))
+    }
+}
+
+fn tst_rate_calculation(e_barr: f64, temperature: f64) -> f64 {
+    // let e_use = if e_diff.is_negative() { 0. } else { e_diff };
+    // println!("barr {}", e_barr);
+    // println!("diff {}", e_diff);
+    const KB_joul: f64 = 1.380649e-23;
+    const h_joul: f64 = 6.62607015e-34;
+    const KB_DIV_H: f64 = KB_joul / h_joul;
+    const KB_eV: f64 = 8.6173324e-5;
+    (KB_joul * temperature / h_joul) * ((-e_barr) / (KB_eV * temperature)).exp()
+}
 
 #[derive(Clone, Debug)]
 pub enum AtomChangeHow {
@@ -362,7 +428,7 @@ impl crate::Simulation {
             AtomChangeHow::Remove => {
                 self.possible_moves.remove_add_remove(pos);
                 for x in self.gridstructure.nn[&pos] {
-                    let pos = super::add_remove_list::AtomPosChange::new(
+                    let pos = atom_change::AtomPosChange::new(
                         x,
                         self.atom_pos[x as usize].cn_metal as u8,
                         self.atom_pos[x as usize].occ as u8,
@@ -381,7 +447,7 @@ impl crate::Simulation {
             AtomChangeHow::Add => {
                 self.possible_moves.remove_add_remove(pos);
                 for neighbor in self.gridstructure.nn[&pos] {
-                    let pos = super::add_remove_list::AtomPosChange::new(
+                    let pos = atom_change::AtomPosChange::new(
                         neighbor,
                         self.atom_pos[neighbor as usize].cn_metal as u8,
                         self.atom_pos[neighbor as usize].occ,
