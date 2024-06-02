@@ -7,6 +7,10 @@ use std::fs;
 use std::io::{self, BufRead};
 use time_graph::instrument;
 
+use crate::grid_structure::{
+    NNN_PAIR_NO_INTERSEC_NUMBER, NN_PAIR_NO_INTERSEC_NUMBER, NN_PAIR_ONLY_INTERSEC_NUMBER,
+};
+
 fn find_key_for_value<'a>(map: &'a HashMap<String, u8>, value: u8) -> Option<&'a str> {
     map.iter().find_map(|(key, val)| {
         if val == &value {
@@ -226,9 +230,9 @@ pub fn read_nn_pair_no_intersec(
 ) -> HashMap<
     u64,
     (
-        [u32; super::NN_PAIR_NO_INTERSEC_NUMBER],
-        [u32; super::NN_PAIR_NO_INTERSEC_NUMBER],
-        [u32; super::NN_PAIR_ONLY_INTERSEC_NUMBER],
+        [u32; NN_PAIR_NO_INTERSEC_NUMBER],
+        [u32; NN_PAIR_NO_INTERSEC_NUMBER],
+        [u32; NN_PAIR_ONLY_INTERSEC_NUMBER],
     ),
     FnvBuildHasher,
 > {
@@ -240,9 +244,9 @@ pub fn read_nn_pair_no_intersec(
     let mut nn_pair: HashMap<
         u64,
         (
-            [u32; super::NN_PAIR_NO_INTERSEC_NUMBER],
-            [u32; super::NN_PAIR_NO_INTERSEC_NUMBER],
-            [u32; super::NN_PAIR_ONLY_INTERSEC_NUMBER],
+            [u32; NN_PAIR_NO_INTERSEC_NUMBER],
+            [u32; NN_PAIR_NO_INTERSEC_NUMBER],
+            [u32; NN_PAIR_ONLY_INTERSEC_NUMBER],
         ),
         FnvBuildHasher,
     > = FnvHashMap::with_capacity_and_hasher(32000, Default::default());
@@ -259,9 +263,9 @@ pub fn read_nn_pair_no_intersec(
             test[1].parse::<u32>().unwrap(),
         );
         let mut neighbors = (
-            [0_u32; super::NN_PAIR_NO_INTERSEC_NUMBER],
-            [0_u32; super::NN_PAIR_NO_INTERSEC_NUMBER],
-            [0_u32; super::NN_PAIR_ONLY_INTERSEC_NUMBER],
+            [0_u32; NN_PAIR_NO_INTERSEC_NUMBER],
+            [0_u32; NN_PAIR_NO_INTERSEC_NUMBER],
+            [0_u32; NN_PAIR_ONLY_INTERSEC_NUMBER],
         );
 
         for (i, l) in test.iter().skip(2).enumerate() {

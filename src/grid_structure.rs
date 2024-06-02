@@ -2,15 +2,19 @@ use super::read_and_write;
 use std::collections::HashMap;
 use vasp_poscar::Poscar;
 
+pub const NN_PAIR_NO_INTERSEC_NUMBER: usize = 7;
+pub const NN_PAIR_ONLY_INTERSEC_NUMBER: usize = 4;
+pub const NNN_PAIR_NO_INTERSEC_NUMBER: usize = 20;
+
 pub struct GridStructure {
     pub nn: HashMap<u32, [u32; super::CN], fnv::FnvBuildHasher>,
     // pub nnn: HashMap<u32, [u32; super::GCN], fnv::FnvBuildHasher>,
     pub nn_pair_no_intersec: HashMap<
         u64,
         (
-            [u32; super::NN_PAIR_NO_INTERSEC_NUMBER],
-            [u32; super::NN_PAIR_NO_INTERSEC_NUMBER],
-            [u32; super::NN_PAIR_ONLY_INTERSEC_NUMBER],
+            [u32; NN_PAIR_NO_INTERSEC_NUMBER],
+            [u32; NN_PAIR_NO_INTERSEC_NUMBER],
+            [u32; NN_PAIR_ONLY_INTERSEC_NUMBER],
         ),
         fnv::FnvBuildHasher,
     >,
