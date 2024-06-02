@@ -1,5 +1,5 @@
-use add_remove::AtomChangeHow;
 use anyhow;
+use atom_change::AtomChangeHow;
 use core::panic;
 use csv::Writer;
 use energy::EnergyInput;
@@ -16,9 +16,9 @@ use std::io::BufReader;
 use std::sync::Arc;
 use std::{cmp, eprint, fs, println, usize};
 
-mod add_remove;
 mod add_remove_list;
 pub mod alpha_energy;
+mod atom_change;
 mod buckets_linear;
 pub mod energy;
 mod grid_structure;
@@ -50,7 +50,7 @@ const SAVE_ENTIRE_SIM: bool = true;
 
 // const how: add_remove::AddRemoveHow = add_remove::AddRemoveHow::RemoveAndAdd(1, 0);
 // const how: add_remove::AtomChangeHow = add_remove::AtomChangeHow::Remove;
-const how: add_remove::AtomChangeHow = add_remove::AtomChangeHow::Add;
+const how: atom_change::AtomChangeHow = atom_change::AtomChangeHow::Add;
 
 #[derive(Clone, Default)]
 pub struct AtomPosition {

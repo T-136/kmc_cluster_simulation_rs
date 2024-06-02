@@ -3,8 +3,8 @@ use rand::prelude::*;
 use rand::rngs::SmallRng;
 use std::collections::HashMap;
 
-use crate::add_remove;
-use crate::add_remove::AtomChangeHow;
+use crate::atom_change;
+use crate::atom_change::AtomChangeHow;
 
 const CN_FOR_INV: u8 = 12;
 // const E_RATIO: f64 = 0.20; 400K
@@ -40,7 +40,7 @@ impl AtomPosChange {
         // return None;
         match how {
             AtomChangeHow::Remove | AtomChangeHow::Exchange => {
-                if atom_type == add_remove::REMOVE_ATOM_TYPE {
+                if atom_type == atom_change::REMOVE_ATOM_TYPE {
                     let k = tst_rate_calculation(cn as f64 * E_RATIO_BARR, temperature);
                     return Some(AtomPosChange { pos, k, how });
                 }
@@ -96,7 +96,7 @@ impl AtomChangePos {
         }
         match how {
             AtomChangeHow::Remove | AtomChangeHow::Exchange => {
-                if atom_type == add_remove::REMOVE_ATOM_TYPE {
+                if atom_type == atom_change::REMOVE_ATOM_TYPE {
                     match self.atom_to_position.entry(pos) {
                         std::collections::hash_map::Entry::Vacant(e) => {
                             let k = tst_rate_calculation(cn as f64 * E_RATIO_BARR, temperature);
