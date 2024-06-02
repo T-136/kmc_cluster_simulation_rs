@@ -32,7 +32,7 @@ pub use buckets_linear::ItemEnum;
 pub use grid_structure::GridStructure;
 pub use sim::Results;
 
-use crate::add_remove_list::AddOrRemove;
+use crate::add_remove_list::AtomChangePos;
 
 const CN: usize = 12;
 // const GCN: usize = 54;
@@ -197,7 +197,7 @@ impl Simulation {
 
         let mut total_energy: f64 = 0.;
         let possible_moves: buckets_linear::Buckets = buckets_linear::Buckets::new();
-        let add_or_remove: add_remove_list::AddOrRemove = add_remove_list::AddOrRemove::new();
+        let add_or_remove: add_remove_list::AtomChangePos = add_remove_list::AtomChangePos::new();
 
         for o in onlyocc.iter() {
             let at_support = atom_pos[*o as usize].nn_support;

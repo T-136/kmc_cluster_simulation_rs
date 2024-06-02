@@ -15,7 +15,7 @@ const CN_E: [f64; 13] = [0., 1., 2., 3., 4., 5., 6., 7., 8., 9., 10., 11., 12.];
 const CN_E_ADD: [f64; 13] = [12., 11., 9., 9., 4., 9., 9., 9., 9., 9., 90., 10000., 1000.];
 
 #[derive(Clone, Debug)]
-pub struct AddOrRemove {
+pub struct AtomChangePos {
     atom_to_position: HashMap<u32, usize, ahash::RandomState>,
     pub atoms: Vec<AtomPosChange>, // [(from, to, energy_change)]
     pub total_k: f64,
@@ -39,7 +39,7 @@ impl AtomPosChange {
     ) -> Option<AtomPosChange> {
         // return None;
         match how {
-            add_remove::AtomChangeHow::Remove | add_remove::AtomChangeHow::Exchange => {
+            AtomChangeHow::Remove | AtomChangeHow::Exchange => {
                 if atom_type == add_remove::REMOVE_ATOM_TYPE {
                     let k = tst_rate_calculation(cn as f64 * E_RATIO_BARR, temperature);
                     return Some(AtomPosChange { pos, k, how });
@@ -69,10 +69,10 @@ impl AtomPosChange {
     }
 }
 
-impl AddOrRemove {
-    pub fn new() -> AddOrRemove {
+impl AtomChangePos {
+    pub fn new() -> AtomChangePos {
         let item_to_position: HashMap<u32, usize, ahash::RandomState> = HashMap::default();
-        AddOrRemove {
+        AtomChangePos {
             atom_to_position: item_to_position,
             atoms: Vec::new(),
             total_k: 0.,
@@ -89,13 +89,13 @@ impl AddOrRemove {
         cn: u8,
         atom_type: u8,
         temperature: f64,
-        how: &add_remove::AtomChangeHow,
+        how: &AtomChangeHow,
     ) {
         if cn >= 11 {
             return;
         }
         match how {
-            add_remove::AtomChangeHow::Remove | add_remove::AtomChangeHow::Exchange => {
+            AtomChangeHow::Remove | AtomChangeHow::Exchange => {
                 if atom_type == add_remove::REMOVE_ATOM_TYPE {
                     match self.atom_to_position.entry(pos) {
                         std::collections::hash_map::Entry::Vacant(e) => {
