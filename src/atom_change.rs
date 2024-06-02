@@ -1,4 +1,4 @@
-use crate::{atom_change, buckets_linear};
+use crate::{atom_change, buckets_linear, moves};
 
 pub use super::alpha_energy;
 
@@ -336,7 +336,7 @@ impl crate::Simulation {
                             let e_barr = alpha_energy::e_barrier(prev_e, future_e);
                             assert!(self.atom_pos[nn_to_pos as usize].occ != 100);
 
-                            let mmove = super::listdict::Move::new(
+                            let mmove = moves::Move::new(
                                 nn_to_pos,
                                 pos,
                                 future_e - prev_e,
@@ -368,7 +368,7 @@ impl crate::Simulation {
                             );
                             let e_barr = alpha_energy::e_barrier(prev_e, future_e);
                             assert!(self.atom_pos[pos as usize].occ != 100);
-                            let mmove = super::listdict::Move::new(
+                            let mmove = moves::Move::new(
                                 pos,
                                 nn_to_atom,
                                 future_e - prev_e,
@@ -410,13 +410,8 @@ impl crate::Simulation {
                 let (prev_e, future_e) =
                     self.calc_energy_change_by_move(full, empty, self.atom_pos[full as usize].occ);
                 let e_barr = alpha_energy::e_barrier(prev_e, future_e);
-                let mmove = super::listdict::Move::new(
-                    full,
-                    empty,
-                    future_e - prev_e,
-                    e_barr,
-                    self.temperature,
-                );
+                let mmove =
+                    moves::Move::new(full, empty, future_e - prev_e, e_barr, self.temperature);
                 self.possible_moves
                     .update_k_if_item_exists(crate::ItemEnum::Move(mmove));
             }

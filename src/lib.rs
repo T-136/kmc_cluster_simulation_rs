@@ -22,7 +22,7 @@ mod atom_change;
 mod buckets_linear;
 pub mod energy;
 mod grid_structure;
-mod listdict;
+mod moves;
 mod read_and_write;
 mod setup;
 mod sim;
@@ -388,7 +388,7 @@ impl Simulation {
                             let (prev_e, future_e) =
                                 self.calc_energy_change_by_move(i as u32, *u, o.occ);
                             let e_barr = alpha_energy::e_barrier(prev_e, future_e);
-                            let mmove = listdict::Move::new(
+                            let mmove = moves::Move::new(
                                 i as u32,
                                 *u,
                                 e_barr,
@@ -1061,7 +1061,7 @@ impl Simulation {
                 );
                 let e_barr = alpha_energy::e_barrier(prev_e, future_e);
                 let mmove =
-                    listdict::Move::new(pos.0, pos.1, future_e - prev_e, e_barr, self.temperature);
+                    moves::Move::new(pos.0, pos.1, future_e - prev_e, e_barr, self.temperature);
                 assert!(self.atom_pos[pos.0 as usize].occ != 255);
                 self.possible_moves
                     .update_k_if_item_exists(ItemEnum::Move(mmove));
@@ -1082,7 +1082,7 @@ impl Simulation {
                 );
                 let e_barr = alpha_energy::e_barrier(prev_e, future_e);
                 let mmove =
-                    listdict::Move::new(pos.1, pos.0, future_e - prev_e, e_barr, self.temperature);
+                    moves::Move::new(pos.1, pos.0, future_e - prev_e, e_barr, self.temperature);
                 assert!(self.atom_pos[pos.1 as usize].occ != 255);
                 self.possible_moves
                     .update_k_if_item_exists(ItemEnum::Move(mmove));
@@ -1117,7 +1117,7 @@ impl Simulation {
                     );
                     let e_barr = alpha_energy::e_barrier(prev_e, future_e);
                     assert!(self.atom_pos[move_to as usize].occ != 255);
-                    let mmove = listdict::Move::new(
+                    let mmove = moves::Move::new(
                         nn_to_from,
                         move_from,
                         future_e - prev_e,
@@ -1146,7 +1146,7 @@ impl Simulation {
                     );
                     let e_barr = alpha_energy::e_barrier(prev_e, future_e);
                     assert!(self.atom_pos[move_to as usize].occ != 255);
-                    let mmove = listdict::Move::new(
+                    let mmove = moves::Move::new(
                         move_to,
                         nn_to_to,
                         e_barr,

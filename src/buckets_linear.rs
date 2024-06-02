@@ -6,13 +6,13 @@ use std::mem;
 use std::{cell::RefCell, rc::Rc};
 
 use super::atom_change;
-use super::listdict;
+use super::moves;
 
 const MAX_EDIT_COUNTER: i32 = 1000;
 
 #[derive(Clone, Debug)]
 pub enum ItemEnum {
-    Move(listdict::Move),
+    Move(moves::Move),
     AddOrRemove(atom_change::AtomPosChange),
 }
 
