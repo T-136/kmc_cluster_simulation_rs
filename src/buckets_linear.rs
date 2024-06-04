@@ -66,55 +66,6 @@ pub struct ItemIndexes {
     pub vec_index: usize,
 }
 
-struct ItemToPosition {
-    move_to_position: HashMap<u64, ItemIndexes, ahash::RandomState>,
-    add_remove_to_position: HashMap<u64, ItemIndexes, ahash::RandomState>,
-}
-// impl ItemToPosition {
-//     fn new() -> ItemToPosition {
-//         let move_to_position: HashMap<u64, ItemIndexes, ahash::RandomState> = HashMap::default();
-//         let add_remove_to_position: HashMap<u64, ItemIndexes, ahash::RandomState> =
-//             HashMap::default();
-//         ItemToPosition {
-//             move_to_position,
-//             add_remove_to_position,
-//         }
-//     }
-//     fn get(&mut self, item: ItemEnum) {
-//         match item {
-//             ItemEnum::Move(_) => todo!(),
-//             ItemEnum::AddOrRemove(_) => todo!(),
-//         }
-//     }
-//     fn insert(&mut self, item: ItemEnum) {
-//         let k = item.get_k();
-//         let power_of_k = k.log2().ceil() as i32;
-//         let id = item.get_id();
-//         match item {
-//             ItemEnum::Move(item) => {
-//                 self.move_to_position.insert(
-//                     id,
-//                     ItemIndexes {
-//                         power_of_k,
-//                         vec_index: self.buckets_list[bucket_index].items.len(),
-//                     },
-//                 );
-//             }
-//             ItemEnum::AddOrRemove(item) => {
-//                 self.add_remove_to_position.insert(
-//                     id,
-//                     ItemIndexes {
-//                         power_of_k,
-//                         vec_index: self.buckets_list[bucket_index].items.len(),
-//                     },
-//                 );
-//             }
-//         }
-//     }
-//
-//     fn remove(&mut self, id) {}
-// }
-
 #[derive(Clone, Debug)]
 pub struct Buckets {
     pub edit_counter: i32,
