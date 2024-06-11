@@ -77,7 +77,6 @@ pub struct Simulation {
     energy_sections_list: Vec<f64>,
     surface_composition: Vec<f64>,
     optimization_cut_off_fraction: Vec<u64>,
-    unique_levels: HashMap<BTreeMap<u8, u32>, (f64, u64)>,
     heat_map: Option<Vec<u64>>,
     snap_shot_sections: Option<Vec<Vec<u8>>>,
     heat_map_sections: Vec<Vec<u64>>,
@@ -195,20 +194,6 @@ impl Simulation {
 
         for o in onlyocc.iter() {
             let at_support = atom_pos[*o as usize].nn_support;
-            // match energy {
-            //     EnergyInput::LinearCn(_) | EnergyInput::Cn(_) => {
-            //         let energy_1000: i64 = energy::energy_1000_calculation(
-            //             &energy,
-            //             atom_pos[*o as usize].cn_metal,
-            //             atom_pos[*o as usize].occ as usize,
-            //             at_support,
-            //             support_e,
-            //         );
-            //         total_energy += energy_1000;
-            //     }
-
-            // EnergyInput::LinearGcn(_) | EnergyInput::Gcn(_) => {
-            // println!("occ check{}", atom_pos[*o as usize].occ);
 
             let energy = alphas.e_one_atom(
                 atom_pos[*o as usize].cn_metal,
@@ -230,8 +215,6 @@ impl Simulation {
             );
             atom_pos[*o as usize].energy = energy;
             total_energy += energy;
-            // }
-            // };
         }
 
         let simulation_folder_name = std::format!("{}K_{}I_{}A", temperature, niter, onlyocc.len());
@@ -249,7 +232,6 @@ impl Simulation {
 
         let cn_dict_sections = Vec::with_capacity(AMOUNT_SECTIONS);
         let energy_sections_list = Vec::with_capacity(AMOUNT_SECTIONS);
-        let unique_levels = HashMap::new();
 
         let snap_shot_sections: Option<Vec<Vec<u8>>> = if write_snap_shots {
             Some(Vec::new())
@@ -302,7 +284,6 @@ impl Simulation {
             time_per_section,
             surface_count,
             optimization_cut_off_fraction,
-            unique_levels,
             snap_shot_sections,
             heat_map,
             heat_map_sections,
@@ -329,7 +310,7 @@ impl Simulation {
         }
     }
 
-    pub fn run(&mut self, mut amount_unique_levels: i32) -> Results {
+    pub fn run(&mut self) -> Results {
         let save_every_nth: u64 = 100;
         let mut rng_choose = SmallRng::from_entropy();
         let mut bucket_pick = SmallRng::from_entropy();
@@ -513,7 +494,6 @@ impl Simulation {
                     temp_energy_section,
                     temp_surface_composition,
                     &mut temp_cn_dict_section,
-                    &mut amount_unique_levels,
                     section_size,
                     save_every_nth,
                 );
@@ -567,7 +547,6 @@ impl Simulation {
             energy_section_list: self.energy_sections_list.clone(),
             time_per_section: self.time_per_section.clone(),
             // cn_dict_sections: self.cn_dict_sections.clone(),
-            unique_levels: self.unique_levels.clone(),
             duration,
         }
     }
@@ -593,7 +572,6 @@ impl Simulation {
         mut temp_energy_section: f64,
         mut temp_surface_composition: f64,
         temp_cn_dict_section: &mut [u64; CN + 1],
-        amount_unique_levels: &mut i32,
         section_size: u64,
         SAVE_TH: u64,
     ) -> (f64, f64) {
@@ -608,31 +586,6 @@ impl Simulation {
                 .for_each(|(i, v)| *v += self.cn_dict[i] as u64);
         }
 
-        if *amount_unique_levels != 0 {
-            let mut cn_hash_map = HashMap::new();
-            for (i, v) in self.cn_dict.into_iter().enumerate() {
-                cn_hash_map.insert(i as u8, v);
-            }
-
-            if *iiter * self.optimization_cut_off_fraction[1]
-                >= self.niter * self.optimization_cut_off_fraction[0]
-            {
-                let cn_btree: BTreeMap<_, _> = cn_hash_map.into_iter().collect();
-                match self.unique_levels.entry(cn_btree) {
-                    Entry::Occupied(mut entry) => {
-                        let (_, x) = entry.get_mut();
-                        *x += 1;
-                    }
-                    Entry::Vacant(entry) => {
-                        if *amount_unique_levels == 1 {
-                            eprint!("amount_unique_levels reached");
-                        }
-                        *amount_unique_levels -= 1;
-                        entry.insert((self.total_energy, 1));
-                    }
-                }
-            }
-        }
         if (iiter + 1) % section_size == 0 {
             self.energy_sections_list
                 .push(temp_energy_section as f64 / (section_size / SAVE_TH) as f64);

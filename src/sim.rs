@@ -69,9 +69,6 @@ pub struct Results {
     pub time_per_section: Vec<f64>,
     pub surface_composition: Vec<f64>,
     pub energy_section_list: Vec<f64>,
-    // pub cn_dict_sections: Vec<HashMap<u8, f64>>,
-    #[serde_as(as = "Vec<(_, _)>")]
-    pub unique_levels: HashMap<BTreeMap<u8, u32>, (f64, u64)>,
 }
 
 fn ordered_map<S>(value: &HashMap<u8, u32>, serializer: S) -> Result<S::Ok, S::Error>

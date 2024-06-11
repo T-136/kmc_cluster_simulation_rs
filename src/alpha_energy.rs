@@ -8,7 +8,6 @@
 
 #[derive(Clone, Debug)]
 pub struct Alphas {
-    //alphas and alphas_summed_to_x are div by cn
     //atom_type_index;in_atom_type_index;cn-1
     pub cn: [[[f64; 12]; super::NUM_ATOM_TYPES]; super::NUM_ATOM_TYPES],
     pub summed_to_x: [[[f64; 12]; super::NUM_ATOM_TYPES]; super::NUM_ATOM_TYPES],
@@ -28,21 +27,7 @@ impl Alphas {
         }
     }
 
-    fn sum_up_to_cn(
-        clean_and_dilluted: &[f64; 12],
-        atom_type_index: usize,
-        in_a_type_index: usize,
-        cn: usize,
-    ) -> f64 {
-        // (0..(cn))
-        //     // .filter(|cn_i| *cn_i != 0)
-        //     .map(|cn_i| {
-        //         // energy += get_alpha_vector(atom_type, nn_atom_type_count, cn_i)
-        //         clean_and_dilluted[cn_i]
-        //         // / cn as f64
-        //     })
-        //     .sum::<f64>()
-
+    fn sum_up_to_cn(clean_and_dilluted: &[f64; 12], cn: usize) -> f64 {
         clean_and_dilluted[..cn].iter().sum::<f64>()
     }
 
@@ -55,12 +40,11 @@ impl Alphas {
 
         for (nn_m_i, metal_e_list) in clean_and_dilluted.iter().enumerate() {
             for cn_index in 0..metal_e_list.len() {
-                metal[nn_m_i][cn_index] = Alphas::sum_up_to_cn(
-                    &clean_and_dilluted[nn_m_i],
-                    metal_i,
-                    nn_m_i,
-                    cn_index + 1,
-                );
+                metal[nn_m_i][cn_index] =
+                    // Alphas::sum_up_to_cn(&clean_and_dilluted[nn_m_i], cn_index + 1);
+                clean_and_dilluted[nn_m_i][..(cn_index + 1)]
+                    .iter()
+                    .sum::<f64>();
             }
         }
 

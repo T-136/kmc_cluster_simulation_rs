@@ -3,9 +3,7 @@ use crate::alpha_energy;
 use crate::atom_change;
 use crate::atom_change::AtomChangeHow;
 use crate::buckets_linear::ItemEnum;
-use crate::grid_structure::{
-    NNN_PAIR_NO_INTERSEC_NUMBER, NN_PAIR_NO_INTERSEC_NUMBER, NN_PAIR_ONLY_INTERSEC_NUMBER,
-};
+use crate::grid_structure::{NN_PAIR_NO_INTERSEC_NUMBER, NN_PAIR_ONLY_INTERSEC_NUMBER};
 use crate::moves;
 use crate::NUM_ATOM_TYPES;
 

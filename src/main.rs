@@ -160,9 +160,6 @@ struct Args {
 
     #[arg(short, long, value_delimiter = '/', default_values_t = vec!(1,2))]
     optimization_cut_off_fraction: Vec<u64>,
-
-    #[arg(short, long, allow_hyphen_values = true)]
-    unique_levels: i32,
 }
 
 fn file_paths(
@@ -207,7 +204,6 @@ fn main() {
     let args = Args::parse();
     let save_folder: String = args.folder;
     let temperature: f64 = args.temperature;
-    let unique_levels = args.unique_levels;
     if !std::path::Path::new(&save_folder).exists() {
         fs::create_dir_all(&save_folder).unwrap();
     }
@@ -323,7 +319,7 @@ fn main() {
                 coating,
                 support_e,
             );
-            let exp = sim.run(unique_levels);
+            let exp = sim.run();
             sim.write_exp_file(&exp);
         }));
     }

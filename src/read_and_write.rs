@@ -7,9 +7,7 @@ use std::fs;
 use std::io::{self, BufRead};
 use time_graph::instrument;
 
-use crate::grid_structure::{
-    NNN_PAIR_NO_INTERSEC_NUMBER, NN_PAIR_NO_INTERSEC_NUMBER, NN_PAIR_ONLY_INTERSEC_NUMBER,
-};
+use crate::grid_structure::{NN_PAIR_NO_INTERSEC_NUMBER, NN_PAIR_ONLY_INTERSEC_NUMBER};
 
 fn find_key_for_value<'a>(map: &'a HashMap<String, u8>, value: u8) -> Option<&'a str> {
     map.iter().find_map(|(key, val)| {
