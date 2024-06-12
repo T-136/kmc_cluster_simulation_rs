@@ -146,9 +146,9 @@ struct Args {
     #[arg(short, long, default_value_t = String::from("../999-pair/"))]
     grid_folder: String,
 
-    #[arg(short, long, default_value_t = String::from("../input_cluster/bulk.poscar"))]
-    core_file: String,
-
+    // #[arg(short, long, default_value_t = String::from("../input_cluster/bulk.poscar"))]
+    // core_file: String,
+    //
     #[arg(short, long, default_value_t = false)]
     write_snap_shots: bool,
 
@@ -168,6 +168,7 @@ fn file_paths(
     String,
     String,
     String,
+    String,
     // String,
     String,
     String,
@@ -175,6 +176,7 @@ fn file_paths(
     String,
 ) {
     (
+        format!("{}bulk.poscar", grid_folder),
         format!("{}nearest_neighbor", grid_folder),
         format!("{}next_nearest_neighbor", grid_folder),
         format!("{}nn_pairlist", grid_folder),
@@ -221,6 +223,7 @@ fn main() {
 
     #[allow(unused_variables)]
     let (
+        bulk_file_name,
         nn_file,
         nnn_file,
         nn_pairlist_file,
@@ -239,7 +242,7 @@ fn main() {
     if heat_map {
         write_snap_shots = true;
     }
-    let bulk_file_name: String = args.core_file;
+    // let bulk_file_name: String = args.core_file;
     let optimization_cut_off_fraction: Vec<u64> = args.optimization_cut_off_fraction;
     let repetition = args.repetition;
 
