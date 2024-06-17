@@ -155,7 +155,7 @@ impl crate::Simulation {
                     self.atom_pos[pos.0 as usize].occ,
                 );
                 let e_barr = alpha_energy::e_barrier(prev_e, future_e);
-                let mmove = Move::new(pos.0, pos.1, future_e - prev_e, e_barr, self.temperature);
+                let mmove = Move::new(pos.0, pos.1, e_barr, future_e - prev_e, self.temperature);
                 assert!(self.atom_pos[pos.0 as usize].occ != 255);
                 self.possible_moves
                     .update_k_if_item_exists(ItemEnum::Move(mmove));
@@ -170,7 +170,7 @@ impl crate::Simulation {
                     self.atom_pos[pos.1 as usize].occ,
                 );
                 let e_barr = alpha_energy::e_barrier(prev_e, future_e);
-                let mmove = Move::new(pos.1, pos.0, future_e - prev_e, e_barr, self.temperature);
+                let mmove = Move::new(pos.1, pos.0, e_barr, future_e - prev_e, self.temperature);
                 assert!(self.atom_pos[pos.1 as usize].occ != 255);
                 self.possible_moves
                     .update_k_if_item_exists(ItemEnum::Move(mmove));
@@ -188,7 +188,9 @@ impl crate::Simulation {
                 && self.atom_pos[nn_to_from as usize].occ != 100
             {
                 // greater than one because of neighbor moving in this spot
-                if self.atom_pos[move_from as usize].cn_metal > 1 {
+                if self.atom_pos[move_from as usize].cn_metal > 1
+                    && !self.atom_pos[nn_to_from as usize].frozen
+                {
                     let (prev_e, future_e) = self.calc_energy_change_by_move(
                         nn_to_from,
                         move_from,
@@ -199,8 +201,8 @@ impl crate::Simulation {
                     let mmove = moves::Move::new(
                         nn_to_from,
                         move_from,
-                        future_e - prev_e,
                         e_barr,
+                        future_e - prev_e,
                         self.temperature,
                     );
                     assert!(self.atom_pos[nn_to_from as usize].occ != 255);
@@ -217,7 +219,9 @@ impl crate::Simulation {
             }
             if self.atom_pos[nn_to_to as usize].occ == 255 {
                 // greater than one because of neighbor moving in this spot
-                if self.atom_pos[nn_to_to as usize].cn_metal > 1 {
+                if self.atom_pos[nn_to_to as usize].cn_metal > 1
+                    && !self.atom_pos[move_to as usize].frozen
+                {
                     let (prev_e, future_e) = self.calc_energy_change_by_move(
                         move_to,
                         nn_to_to,
@@ -319,13 +323,18 @@ impl crate::Simulation {
 
         // inter_nn.iter().for_each(|x| {
         for x in inter_nn {
-            if self.atom_pos[x as usize].occ != 255 && x != move_from {
+            if self.atom_pos[x as usize].occ != 255
+                && x != move_from
+                && self.atom_pos[x as usize].occ != 100
+            {
                 nn_atom_type_count_tst[self.atom_pos[x as usize].occ as usize] += 1;
-                // from_nn_atom_type_no_tst[self.atom_pos[x as usize].occ as usize - 1] -= 1;
-                // to_nn_atom_type_count[self.atom_pos[x as usize].occ as usize - 1] -= 1;
+                // from_nn_atom_type_no_tst[self.atom_pos[x as usize].occ as usize] -= 1;
+                // to_nn_atom_type_count[self.atom_pos[x as usize].occ as usize] -= 1;
                 cn_tst += 1;
             }
         }
+
+        // let tst_e = 0.;
 
         let tst_e = self.alphas.e_one_atom_tst(
             cn_tst,

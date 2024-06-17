@@ -1,6 +1,5 @@
 use anyhow;
 use atom_change::AtomChangeHow;
-use core::panic;
 use csv::Writer;
 use energy::EnergyInput;
 use rand;
@@ -22,6 +21,7 @@ mod atom_change;
 mod buckets_linear;
 pub mod energy;
 mod grid_structure;
+// mod main;
 mod moves;
 mod read_and_write;
 mod setup;
@@ -54,6 +54,42 @@ pub struct AtomPosition {
     energy: f64,
     nn_support: u8,
     nn_atom_type_count: [u8; NUM_ATOM_TYPES],
+    frozen: bool,
+}
+
+fn min_max_xyz(xyz: &Vec<[f64; 3]>, i: usize) -> (f64, f64) {
+    let min = xyz
+        .iter()
+        .map(|p| p[i])
+        .min_by(|a, b| a.partial_cmp(b).unwrap())
+        .unwrap();
+    let max = xyz
+        .iter()
+        .map(|p| p[i])
+        .max_by(|a, b| a.partial_cmp(b).unwrap())
+        .unwrap();
+    (min, max)
+}
+
+fn freeze_atoms(pos: &mut [AtomPosition], freez: &[String], xyz: &Vec<[f64; 3]>) {
+    let (min_x, max_x) = min_max_xyz(xyz, 0);
+    let (min_y, max_y) = min_max_xyz(xyz, 1);
+    let (min_z, max_z) = min_max_xyz(xyz, 2);
+
+    xyz.iter().enumerate().for_each(|(i, &p)| {
+        if (p[0] == min_x && freez.contains(&"x".to_string()))
+            || (p[0] == max_x && freez.contains(&"-x".to_string()))
+            || (p[1] == min_y && freez.contains(&"y".to_string()))
+            || (p[1] == max_y && freez.contains(&"-y".to_string()))
+            || (p[2] == min_z && freez.contains(&"z".to_string()))
+            || (p[2] == max_z && freez.contains(&"-z".to_string()))
+        {
+            if pos[i].occ != 100 && pos[i].occ != 255 {
+                println!("freezing atom: {:?}", xyz[i]);
+                pos[i].frozen = true;
+            }
+        }
+    });
 }
 
 #[derive(Clone)]
@@ -104,6 +140,7 @@ impl Simulation {
         gridstructure: Arc<GridStructure>,
         coating: Option<String>,
         support_e: i64,
+        freez: Option<Vec<String>>,
     ) -> Simulation {
         let nsites: u32 = GRID_SIZE[0] * GRID_SIZE[1] * GRID_SIZE[2] * 4;
         let mut atom_pos: Vec<AtomPosition> = vec![
@@ -252,17 +289,21 @@ impl Simulation {
         let mut atom_1 = 0;
         let mut atom_2 = 0;
         for o in atom_pos.iter() {
-            if o.occ == 1 {
+            if o.occ == 0 {
                 atom_1 += 1;
             }
-            if o.occ == 2 {
+            if o.occ == 1 {
                 atom_2 += 1;
             }
         }
         let composition = atom_1 as f64 / (atom_1 + atom_2) as f64;
         surface_composition
-            .push(surface_count[1] as f64 / (surface_count[1] + surface_count[2]) as f64);
+            .push(surface_count[0] as f64 / (surface_count[0] + surface_count[1]) as f64);
         time_per_section.push(0.);
+
+        if let Some(freez) = freez {
+            freeze_atoms(&mut atom_pos, &freez, &gridstructure.xsites_positions);
+        }
 
         Simulation {
             atom_pos,
@@ -332,20 +373,8 @@ impl Simulation {
                 self.number_all_atoms as usize,
                 Default::default(),
             );
-        // if self.niter == 0 {
-        //     if let Some(x) = self.opt_save_lowest_energy(&0, &mut lowest_energy_struct) {
-        //         lowest_e_onlyocc = x;
-        //     };
-        // }
 
         for (i, o) in self.atom_pos.iter().enumerate() {
-            // Simulation::add_atom_changes(
-            //     &mut self.possible_moves,
-            //     i as u32,
-            //     o.cn_metal as u8,
-            //     o.occ,
-            //     self.temperature,
-            // );
             let pos_change = atom_change::AtomPosChange::new(
                 i as u32,
                 o.cn_metal as u8,
@@ -362,7 +391,9 @@ impl Simulation {
                     if self.atom_pos[*u as usize].occ == 255 {
                         // >1 so that atoms cant leave the cluster
                         // <x cant move if all neighbors are occupied
-                        if self.atom_pos[*u as usize].cn_metal > 1 {
+                        if self.atom_pos[*u as usize].cn_metal > 1
+                            && !self.atom_pos[i as usize].frozen
+                        {
                             let (prev_e, future_e) =
                                 self.calc_energy_change_by_move(i as u32, *u, o.occ);
                             let e_barr = alpha_energy::e_barrier(prev_e, future_e);
@@ -380,9 +411,6 @@ impl Simulation {
                 }
             }
         }
-
-        // self.possible_moves.calc_total_k_change(self.temperature);
-        // self.add_or_remove.calc_total_cn_change();
 
         let section_size: u64 = self.niter / AMOUNT_SECTIONS as u64;
         println!("section_size: {}", section_size);
@@ -460,9 +488,19 @@ impl Simulation {
                 .expect("kmc pick move failed");
             match item.clone() {
                 ItemEnum::Move(mmove) => {
+                    // println!(
+                    //     "item xyz: {:?}",
+                    //     self.gridstructure.xsites_positions[mmove.from as usize]
+                    // );
+                    // println!("tot energy {}", self.total_energy);
+                    // println!("energy {}", mmove.e_diff);
+                    // println!(
+                    //     "from to {:?}, {:?}",
+                    //     self.atom_pos[mmove.from as usize].nn_atom_type_count,
+                    //     self.atom_pos[mmove.to as usize].nn_atom_type_count
+                    // );
                     self.increment_time(k_tot, &mut rng_choose);
 
-                    self.possible_moves.remove_move(mmove.from, mmove.to);
                     self.perform_move(mmove.from, mmove.to, mmove.e_diff, is_recording_sections);
                     self.update_moves(mmove.from, mmove.to);
                     self.update_possible_moves(mmove.from, mmove.to);
@@ -480,13 +518,6 @@ impl Simulation {
                     self.redox_update_add_remove(change.pos, &how);
                 }
             }
-            // if iiter * self.optimization_cut_off_fraction[1]
-            //     >= self.niter * self.optimization_cut_off_fraction[0]
-            // {
-            //     if let Some(x) = self.opt_save_lowest_energy(&iiter, &mut lowest_energy_struct) {
-            //         lowest_e_onlyocc = x;
-            //     };
-            // }
 
             if SAVE_ENTIRE_SIM || is_recording_sections {
                 (temp_energy_section, temp_surface_composition) = self.save_sections(
@@ -577,8 +608,8 @@ impl Simulation {
     ) -> (f64, f64) {
         if (iiter + 1) % SAVE_TH == 0 {
             temp_energy_section += self.total_energy;
-            temp_surface_composition += self.surface_count[1] as f64
-                / (self.surface_count[1] + self.surface_count[2]) as f64;
+            temp_surface_composition += self.surface_count[0] as f64
+                / (self.surface_count[0] + self.surface_count[1]) as f64;
 
             temp_cn_dict_section
                 .iter_mut()
@@ -772,182 +803,265 @@ pub fn find_simulation_with_lowest_energy(folder: String) -> anyhow::Result<()> 
     Ok(())
 }
 
-// #[cfg(test)]
-// mod tests {
-//     // Note this useful idiom: importing names from outer (for mod tests) scope.
-//     use super::*;
-//
-//     #[test]
-//     fn test_perform_move() {
-//         fn file_paths(
-//             grid_folder: String,
-//         ) -> (String, String, String, String, String, String, String) {
-//             (
-//                 format!("{}/nearest_neighbor", grid_folder),
-//                 format!("{}/next_nearest_neighbor", grid_folder),
-//                 format!("{}/nn_pairlist", grid_folder),
-//                 format!("{}/nnn_pairlist", grid_folder),
-//                 format!("{}/atom_sites", grid_folder),
-//                 format!("{}/nn_pair_no_intersec", grid_folder),
-//                 format!("{}/nnn_gcn_no_intersec.json", grid_folder),
-//                 format!("{}surrounding_moves.json", grid_folder),
-//             )
-//         }
-//         let (
-//             pairlist_file,
-//             n_pairlist_file,
-//             nn_pairlist_file,
-//             nnn_pairlist_file,
-//             atom_sites,
-//             nn_pair_no_int_file,
-//             nnn_pair_no_int_file,
-//             surrounding_moves_file,
-//         ) = file_paths("../999-pair_inline".to_string());
-//
-//         let energy = EnergyInput::Gcn([
-//             4752, 4719, 4686, 4653, 4620, 4587, 4554, 4521, 4488, 4455, 4422, 4389, 4356, 4323,
-//             4290, 4257, 4224, 4191, 4158, 4125, 4092, 4059, 4026, 3993, 3960, 3927, 3894, 3861,
-//             3828, 3795, 3762, 3729, 3696, 3663, 3630, 3597, 3564, 3531, 3498, 3465, 3432, 3399,
-//             3366, 3333, 3300, 3267, 3234, 3201, 3168, 3135, 3102, 3069, 3036, 3003, 2970, 2937,
-//             2904, 2871, 2838, 2805, 2772, 2739, 2706, 2673, 2640, 2607, 2574, 2541, 2508, 2475,
-//             2442, 2409, 2376, 2343, 2310, 2277, 2244, 2211, 2178, 2145, 2112, 2079, 2046, 2013,
-//             1980, 1947, 1914, 1881, 1848, 1815, 1782, 1749, 1716, 1683, 1650, 1617, 1584, 1551,
-//             1518, 1485, 1452, 1419, 1386, 1353, 1320, 1287, 1254, 1221, 1188, 1155, 1122, 1089,
-//             1056, 1023, 990, 957, 924, 891, 858, 825, 792, 759, 726, 693, 660, 627, 594, 561, 528,
-//             495, 462, 429, 396, 363, 330, 297, 264, 231, 198, 165, 132, 99, 66, 33, 0,
-//         ]);
-//
-//         let gridstructure = GridStructure::new(
-//             pairlist_file,
-//             n_pairlist_file,
-//             nn_pair_no_int_file,
-//             nnn_pair_no_int_file,
-//             atom_sites,
-//             String::from("../input_cluster/bulk.poscar"),
-//             surrounding_moves_file,
-//         );
-//
-//         let mut sim = Simulation::new(
-//             1000000000,
-//             None,
-//             Some(20),
-//             300.,
-//             String::from("./sim/"),
-//             false,
-//             false,
-//             0_usize,
-//             vec![3, 4],
-//             energy,
-//             None,
-//             Arc::new(gridstructure),
-//         );
-//         let (from, to, to2) = 'bar: {
-//             for (from, to, _) in &sim.possible_moves.moves {
-//                 for x in sim.gridstructure.nn[to] {
-//                     if sim.gridstructure.nn[from].contains(&x) && sim.occ[x as usize] == 0 {
-//                         break 'bar (*from, *to, x);
-//                     }
-//                 }
-//             }
-//             (0, 0, 0)
-//         };
-//         println!("{},{},{}", from, to, to2);
-//         // let (from, to) = sim.possible_moves.moves[1];
-//         let mut effected_gcn = Vec::new();
-//         for o in sim.gridstructure.nn[&from] {
-//             for x in sim.gridstructure.nn[&o] {
-//                 if !effected_gcn.contains(&x) && sim.cn_metal[x as usize] != 0 {
-//                     effected_gcn.push(x)
-//                 }
-//             }
-//         }
-//         for o in sim.gridstructure.nn[&to] {
-//             for x in sim.gridstructure.nn[&o] {
-//                 if !effected_gcn.contains(&x) && sim.cn_metal[x as usize] != 0 {
-//                     effected_gcn.push(x)
-//                 }
-//             }
-//         }
-//         for o in sim.gridstructure.nn[&to2] {
-//             for x in sim.gridstructure.nn[&o] {
-//                 if !effected_gcn.contains(&x) && sim.cn_metal[x as usize] != 0 {
-//                     effected_gcn.push(x)
-//                 }
-//             }
-//         }
-//         let old_gcn = sim
-//             .gcn_metal
-//             .clone()
-//             .into_iter()
-//             .enumerate()
-//             .filter(|(i, _)| effected_gcn.contains(&(*i as u32)))
-//             .map(|(i, x)| (i, x))
-//             .collect::<Vec<(usize, usize)>>();
-//
-//         println!(
-//             "nn_from: {:?} nn_to: {:?} nn_to2: {:?}",
-//             sim.gridstructure.nn[&from], sim.gridstructure.nn[&to], sim.gridstructure.nn[&to2]
-//         );
-//         // println!("gcn before: {:?}", sim.gcn_metal);
-//         assert!(sim.occ[to2 as usize] == 0, "{}", sim.occ[to2 as usize]);
-//         assert!(sim.occ[to as usize] == 0, "{}", sim.occ[to as usize]);
-//
-//         println!(
-//             "occ {:?}",
-//             sim.occ
-//                 .iter()
-//                 .enumerate()
-//                 .filter(|(_, x)| **x == 1)
-//                 .map(|(i, _)| i)
-//                 .collect::<Vec<usize>>()
-//         );
-//         sim.perform_move(from, to, 0, false);
-//         // println!("gcn between: {:?}", sim.gcn_metal);
-//         // println!("gcn between: ");
-//         sim.perform_move(to, to2, 0, false);
-//         // println!("gcn between2: ");
-//         println!(
-//             "{:?}",
-//             sim.gcn_metal
-//                 .clone()
-//                 .into_iter()
-//                 .enumerate()
-//                 .filter(|(i, _)| effected_gcn.contains(&(*i as u32)))
-//                 .map(|(i, x)| (i, x))
-//                 .collect::<Vec<(usize, usize)>>()
-//         );
-//         sim.perform_move(to2, from, 0, false);
-//         // println!("gcn after: {:?}", sim.gcn_metal);
-//         let (from_change, to_change, intercet, is_reverse) =
-//             no_int_nnn_from_move(from, to, &sim.gridstructure.nnn_pair_no_intersec);
-//         let (from_change2, to_change2, intercet2, _) =
-//             no_int_nnn_from_move(to, to2, &sim.gridstructure.nnn_pair_no_intersec);
-//         let (from_change3, to_change3, intercet3, _) =
-//             no_int_nnn_from_move(to2, from, &sim.gridstructure.nnn_pair_no_intersec);
-//         println!("from: {}, to: {}, to2: {}\n", from, to, to2);
-//         println!(
-//             "from: {:?},\n to: {:?},\n inter: {:?} \n",
-//             from_change, to_change, intercet
-//         );
-//         println!(
-//             "from: {:?},\n to: {:?},\n inter: {:?} \n",
-//             from_change2, to_change2, intercet2
-//         );
-//         println!(
-//             "from: {:?},\n to: {:?},\n inter: {:?} \n",
-//             from_change3, to_change3, intercet3
-//         );
-//         let new_gcn = sim
-//             .gcn_metal
-//             .clone()
-//             .into_iter()
-//             .enumerate()
-//             .filter(|(i, _)| effected_gcn.contains(&(*i as u32)))
-//             .map(|(i, x)| (i, x))
-//             .collect::<Vec<(usize, usize)>>();
-//         assert_eq!(old_gcn, new_gcn);
-//     }
-// }
+#[cfg(test)]
+mod tests {
+    // Note this useful idiom: importing names from outer (for mod tests) scope.
+    use super::*;
+
+    #[test]
+    fn test_perform_move() {
+        fn file_paths(
+            grid_folder: String,
+        ) -> (
+            String,
+            String,
+            String,
+            String,
+            // String,
+            String,
+            String,
+            String,
+            String,
+        ) {
+            (
+                format!("{}bulk.poscar", grid_folder),
+                format!("{}nearest_neighbor", grid_folder),
+                format!("{}next_nearest_neighbor", grid_folder),
+                format!("{}nn_pairlist", grid_folder),
+                // format!("{}nnn_pairlist", grid_folder),
+                format!("{}atom_sites", grid_folder),
+                format!("{}nn_pair_no_intersec", grid_folder),
+                format!("{}nnn_gcn_no_intersec.json", grid_folder),
+                format!("{}surrounding_moves.json", grid_folder),
+            )
+        }
+        #[allow(unused_variables)]
+        let (
+            bulk_file_name,
+            nn_file,
+            nnn_file,
+            nn_pairlist_file,
+            // nnn_pairlist_file,
+            atom_sites,
+            nn_pair_no_int_file,
+            nnn_pair_no_int_file,
+            surrounding_moves_file,
+        ) = file_paths("../303030-pair_kmc/".to_string());
+
+        let gridstructure = GridStructure::new(
+            nn_file,
+            // nnn_file,
+            nn_pair_no_int_file,
+            // nnn_pair_no_int_file,
+            atom_sites,
+            bulk_file_name,
+            surrounding_moves_file,
+        );
+        let gridstructure = Arc::new(gridstructure);
+
+        let mut atom_names: HashMap<String, u8> = HashMap::new();
+        // atom_names.insert("Pt".to_string(), 0);
+        // atom_names.insert("Pd".to_string(), 1);
+        atom_names.insert("Al".to_string(), 100);
+
+        let alphas_arr = read_alphas("./Pt_Pd.6.bat".to_string(), &mut atom_names);
+        let alphas = alpha_energy::Alphas::new(alphas_arr);
+
+        let mut sim = Simulation::new(
+            atom_names,
+            1000000,
+            Some("./711A.xyz".to_string()),
+            None,
+            900.,
+            String::from("./sim/"),
+            false,
+            false,
+            0_usize,
+            vec![4, 4],
+            Arc::new(alphas),
+            None,
+            gridstructure,
+            None,
+            0,
+            None,
+        );
+        let mut rng_choose = SmallRng::from_entropy();
+        let mut bucket_pick = SmallRng::from_entropy();
+        let mut coin_toss = SmallRng::from_entropy();
+
+        for (i, o) in sim.atom_pos.iter().enumerate() {
+            let pos_change = atom_change::AtomPosChange::new(
+                i as u32,
+                o.cn_metal as u8,
+                o.occ,
+                sim.temperature,
+                how.clone(),
+            );
+            if let Some(pos_change) = pos_change {
+                sim.possible_moves
+                    .cond_add_item(ItemEnum::AddOrRemove(pos_change));
+            }
+            if o.occ != 255 && o.occ != 100 {
+                for u in &sim.gridstructure.nn[&(i as u32)] {
+                    if sim.atom_pos[*u as usize].occ == 255 {
+                        // >1 so that atoms cant leave the cluster
+                        // <x cant move if all neighbors are occupied
+                        if sim.atom_pos[*u as usize].cn_metal > 1
+                            && !sim.atom_pos[i as usize].frozen
+                        {
+                            let (prev_e, future_e) =
+                                sim.calc_energy_change_by_move(i as u32, *u, o.occ);
+                            let e_barr = alpha_energy::e_barrier(prev_e, future_e);
+                            let mmove = moves::Move::new(
+                                i as u32,
+                                *u,
+                                e_barr,
+                                future_e - prev_e,
+                                sim.temperature,
+                            );
+                            assert!(sim.atom_pos[i as usize].occ != 255);
+                            sim.possible_moves.cond_add_item(ItemEnum::Move(mmove))
+                        }
+                    }
+                }
+            }
+        }
+
+        let (item, k_tot) = sim
+            .possible_moves
+            .choose_ramdom_move_kmc(
+                &mut rng_choose,
+                &mut bucket_pick,
+                &mut coin_toss,
+                sim.temperature,
+            )
+            .expect("kmc pick move failed");
+        let item = if let ItemEnum::Move(item) = item {
+            item
+        } else {
+            panic!("p");
+        };
+        let (from, to, to2) = 'bar: {
+            for x in sim.gridstructure.nn[&item.to] {
+                if sim.gridstructure.nn[&item.from].contains(&x)
+                    && sim.atom_pos[x as usize].occ == 255
+                {
+                    break 'bar (item.from, item.to, x);
+                }
+            }
+            panic!("p");
+            (255, 255, 255)
+        };
+        println!("{},{},{}", from, to, to2);
+        // let (from, to) = sim.possible_moves.moves[1];
+
+        println!(
+            "nn_from: {:?} nn_to: {:?} nn_to2: {:?}",
+            sim.gridstructure.nn[&from], sim.gridstructure.nn[&to], sim.gridstructure.nn[&to2]
+        );
+        // println!("gcn before: {:?}", sim.gcn_metal);
+        assert!(
+            sim.atom_pos[to2 as usize].occ == 255,
+            "{}",
+            sim.atom_pos[to2 as usize].occ
+        );
+        assert!(
+            sim.atom_pos[to as usize].occ == 255,
+            "{}",
+            sim.atom_pos[to as usize].occ
+        );
+
+        // println!(
+        //     "occ {:?}",
+        //     sim.atom_pos.occ
+        //         .iter()
+        //         .enumerate()
+        //         .filter(|(_, x)| **x == 1)
+        //         .map(|(i, _)| i)
+        //         .collect::<Vec<usize>>()
+        // );
+        let e_before_move = sim.total_energy;
+        println!("total_e {}", sim.total_energy);
+        println!("e_diff 1: {}\n", item.e_diff);
+        sim.perform_move(from, to, item.e_diff, false);
+        sim.update_moves(from, to);
+        sim.update_possible_moves(from, to);
+        // println!("gcn between: {:?}", sim.gcn_metal);
+        // println!("gcn between: ");
+        let item = sim.possible_moves.get(to, to2).unwrap();
+        let item = if let ItemEnum::Move(item) = item {
+            item
+        } else {
+            panic!("p")
+        };
+        println!("total_e {}", sim.total_energy);
+        println!("e_diff 2: {}\n", item.e_diff);
+
+        sim.perform_move(to, to2, item.e_diff, false);
+        sim.update_moves(to, to2);
+        sim.update_possible_moves(to, to2);
+        // println!("gcn between2: ");
+        let item = sim.possible_moves.get(to2, from).unwrap();
+        let item = if let ItemEnum::Move(item) = item {
+            item
+        } else {
+            panic!("p")
+        };
+        println!("total_e {}", sim.total_energy);
+        println!("e_diff 2: {}\n", item.e_diff);
+        sim.perform_move(to2, from, item.e_diff, false);
+        // println!("gcn after: {:?}", sim.gcn_metal);
+        println!("from: {}, to: {}, to2: {}\n", from, to, to2);
+        println!("total_e {}", sim.total_energy);
+        assert_eq!(e_before_move, sim.total_energy);
+    }
+}
+
+fn read_alphas(alphas_file: String, atom_names: &mut HashMap<String, u8>) -> [[[f64; 12]; 2]; 2] {
+    const LINE_COUNT: usize = 14;
+
+    let path = std::path::Path::new(&alphas_file);
+    let file_name = path.file_name().unwrap();
+    // let mut x = alphas_file.split('.');
+    let atom_names_string = file_name.to_str().unwrap().split('.').next().unwrap();
+    for (i, metal) in atom_names_string.split('_').enumerate() {
+        atom_names.insert(metal.to_string(), i as u8);
+    }
+    let pairlist = fs::File::open(alphas_file).expect("Should have been able to read the file");
+
+    let lines = BufReader::new(pairlist);
+    let mut alphas: [[[f64; 12]; 2]; 2] = [[[0.; 12]; 2]; 2];
+
+    for (i, line) in lines.lines().enumerate() {
+        println!("{}", i);
+        let r = line.unwrap();
+        let num = r.parse::<f64>().unwrap();
+        println!("{}", num);
+        if i < LINE_COUNT {
+            if i >= 12 {
+                continue;
+            }
+            alphas[0][0][i] = num;
+        } else if i < LINE_COUNT * 2 {
+            if i >= LINE_COUNT * 2 - 2 {
+                continue;
+            }
+            alphas[1][1][i - LINE_COUNT * 1] = num;
+        } else if i < LINE_COUNT * 3 {
+            if i >= LINE_COUNT * 3 - 2 {
+                continue;
+            }
+            alphas[1][0][i - LINE_COUNT * 2] = num;
+        } else {
+            if i >= LINE_COUNT * 4 - 2 {
+                continue;
+            }
+            alphas[0][1][i - LINE_COUNT * 3] = num;
+        }
+    }
+    alphas
+}
+
 enum FromOrTo {
     From,
     To,

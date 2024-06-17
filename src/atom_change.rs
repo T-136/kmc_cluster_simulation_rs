@@ -327,7 +327,9 @@ impl crate::Simulation {
                         && self.atom_pos[nn_to_pos as usize].occ != 100
                     {
                         // greater than one because of neighbor moving in this spot
-                        if self.atom_pos[pos as usize].cn_metal > 1 {
+                        if self.atom_pos[pos as usize].cn_metal > 1
+                            && !self.atom_pos[nn_to_pos as usize].frozen
+                        {
                             let (prev_e, future_e) = self.calc_energy_change_by_move(
                                 nn_to_pos,
                                 pos,
@@ -339,8 +341,8 @@ impl crate::Simulation {
                             let mmove = moves::Move::new(
                                 nn_to_pos,
                                 pos,
-                                future_e - prev_e,
                                 e_barr,
+                                future_e - prev_e,
                                 self.temperature,
                             );
                             self.possible_moves
@@ -360,7 +362,9 @@ impl crate::Simulation {
                     }
                     if self.atom_pos[nn_to_atom as usize].occ == 255 {
                         // greater than one because of neighbor moving in this spot
-                        if self.atom_pos[pos as usize].cn_metal > 1 {
+                        if self.atom_pos[nn_to_atom as usize].cn_metal > 1
+                            && !self.atom_pos[pos as usize].frozen
+                        {
                             let (prev_e, future_e) = self.calc_energy_change_by_move(
                                 pos,
                                 nn_to_atom,
@@ -371,8 +375,8 @@ impl crate::Simulation {
                             let mmove = moves::Move::new(
                                 pos,
                                 nn_to_atom,
-                                future_e - prev_e,
                                 e_barr,
+                                future_e - prev_e,
                                 self.temperature,
                             );
                             self.possible_moves
@@ -411,7 +415,7 @@ impl crate::Simulation {
                     self.calc_energy_change_by_move(full, empty, self.atom_pos[full as usize].occ);
                 let e_barr = alpha_energy::e_barrier(prev_e, future_e);
                 let mmove =
-                    moves::Move::new(full, empty, future_e - prev_e, e_barr, self.temperature);
+                    moves::Move::new(full, empty, e_barr, future_e - prev_e, self.temperature);
                 self.possible_moves
                     .update_k_if_item_exists(crate::ItemEnum::Move(mmove));
             }

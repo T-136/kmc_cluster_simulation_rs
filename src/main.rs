@@ -140,6 +140,9 @@ struct Args {
     #[arg(short, long, value_delimiter = '-', default_values_t = vec!(0,1))]
     repetition: Vec<usize>,
 
+    #[arg(short, long, value_delimiter = ',', allow_hyphen_values(true))]
+    freeze: Option<Vec<String>>,
+
     #[arg(long, allow_hyphen_values(true))]
     support_e: Option<i64>,
 
@@ -210,6 +213,7 @@ fn main() {
         fs::create_dir_all(&save_folder).unwrap();
     }
     let support_e = args.support_e.unwrap_or(0);
+    let freez = args.freeze;
 
     // let (atoms_input, sup) =
     let (atoms_input, support_indices) = if let Some(atoms_input) = args.start_structure.atoms_input
@@ -303,6 +307,7 @@ fn main() {
         let support_indices = support_indices.clone();
         let atom_names = atom_names.clone();
         let coating = coating.clone();
+        let freez = freez.clone();
 
         handle_vec.push(thread::spawn(move || {
             let mut sim = Simulation::new(
@@ -321,6 +326,7 @@ fn main() {
                 gridstructure_arc,
                 coating,
                 support_e,
+                freez,
             );
             let exp = sim.run();
             sim.write_exp_file(&exp);

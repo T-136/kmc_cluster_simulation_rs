@@ -94,6 +94,24 @@ impl Buckets {
         }
     }
 
+    pub fn get(&mut self, from: u32, to: u32) -> Option<ItemEnum> {
+        if let Some(item_indexes) = self
+            .move_to_position
+            .get(&(from as u64 + ((to as u64) << 32)))
+        {
+            let bucket_index = self
+                .bucket_power_to_pos
+                .get(&item_indexes.power_of_k)
+                .unwrap();
+
+            let bucket = &mut self.buckets_list[*bucket_index];
+
+            let item = bucket.items[item_indexes.vec_index].clone();
+            return Some(item);
+        }
+        None
+    }
+
     fn cond_update_ks(&mut self, new_k: f64, bucket_index: usize) {
         self.buckets_list[bucket_index].cond_update_bucket_k(new_k);
         self.edit_counter += 1;

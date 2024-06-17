@@ -38,7 +38,7 @@ pub struct Start {
 
 impl Start {
     pub fn new(total_energy: f64, cn_dict: &[u32]) -> Start {
-        let start_energy = total_energy as f64 / 1000.;
+        let start_energy = total_energy as f64;
         let mut start_cn_dict = HashMap::new();
         for (k, v) in cn_dict.iter().enumerate() {
             start_cn_dict.insert(k as u8, *v);
