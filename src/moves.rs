@@ -136,8 +136,6 @@ impl crate::Simulation {
             );
             // self.cn_dict[self.atom_pos[move_to as usize].cn_metal] += 1;
         }
-
-        self.total_energy += e_diff;
     }
 
     pub fn update_moves(&mut self, move_from: u32, move_to: u32) {
@@ -309,9 +307,6 @@ impl crate::Simulation {
         move_to: u32,
         atom_typ: u8,
     ) -> (f64, f64) {
-        // println!("{}", atom_typ_index);
-        // println!("{:?}", self.atom_pos.neigboring_atom_type_count);
-        //
         let (from_change_nn, to_change_nn, inter_nn) =
             no_int_nn_from_move(move_from, move_to, &self.gridstructure.nn_pair_no_intersec);
 
@@ -328,13 +323,9 @@ impl crate::Simulation {
                 && self.atom_pos[x as usize].occ != 100
             {
                 nn_atom_type_count_tst[self.atom_pos[x as usize].occ as usize] += 1;
-                // from_nn_atom_type_no_tst[self.atom_pos[x as usize].occ as usize] -= 1;
-                // to_nn_atom_type_count[self.atom_pos[x as usize].occ as usize] -= 1;
                 cn_tst += 1;
             }
         }
-
-        // let tst_e = 0.;
 
         let tst_e = self.alphas.e_one_atom_tst(
             cn_tst,

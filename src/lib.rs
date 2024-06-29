@@ -229,31 +229,6 @@ impl Simulation {
         let mut total_energy: f64 = 0.;
         let possible_moves: buckets_linear::Buckets = buckets_linear::Buckets::new();
 
-        for o in onlyocc.iter() {
-            let at_support = atom_pos[*o as usize].nn_support;
-
-            let energy = alphas.e_one_atom(
-                atom_pos[*o as usize].cn_metal,
-                atom_pos[*o as usize].nn_atom_type_count,
-                gridstructure.nn[o].iter().filter_map(|x| {
-                    if atom_pos[*x as usize].occ != 255 {
-                        Some(alpha_energy::NnData {
-                            cn_metal: atom_pos[*x as usize].cn_metal,
-                            nn_atom_type_count_num_list: atom_pos[*x as usize].nn_atom_type_count,
-                            atom_type: atom_pos[*x as usize].occ as usize,
-                        })
-                    } else {
-                        None
-                    }
-                }),
-                atom_pos[*o as usize].occ,
-                at_support,
-                support_e,
-            );
-            atom_pos[*o as usize].energy = energy;
-            total_energy += energy;
-        }
-
         let simulation_folder_name = std::format!("{}K_{}I_{}A", temperature, niter, onlyocc.len());
 
         let mut sub_folder = save_folder_name + &simulation_folder_name;
@@ -305,7 +280,7 @@ impl Simulation {
             freeze_atoms(&mut atom_pos, &freez, &gridstructure.xsites_positions);
         }
 
-        Simulation {
+        let mut sim = Simulation {
             atom_pos,
             atom_names,
             niter,
@@ -314,7 +289,7 @@ impl Simulation {
             onlyocc,
             possible_moves,
             sim_time: 0.,
-            total_energy,
+            total_energy: 0.,
             cn_dict,
             cn_dict_at_supp,
             save_folder: sub_folder,
@@ -334,7 +309,9 @@ impl Simulation {
             support_e,
             is_supported,
             // add_or_remove,
-        }
+        };
+        sim.calc_total_energy();
+        sim
     }
 
     fn check_moves_not_start_255(&self, bucket: &buckets_linear::Bucket) {
@@ -468,15 +445,6 @@ impl Simulation {
             };
             self.cond_snap_and_heat_map(&iiter);
 
-            // println!(
-            //     "total cn: {}, ",
-            //     self.atom_pos
-            //         .iter()
-            //         .filter(|x| x.occ != 255)
-            //         .map(|x| x.cn_metal)
-            //         .sum::<usize>()
-            // );
-
             let (item, k_tot) = self
                 .possible_moves
                 .choose_ramdom_move_kmc(
@@ -488,17 +456,6 @@ impl Simulation {
                 .expect("kmc pick move failed");
             match item.clone() {
                 ItemEnum::Move(mmove) => {
-                    // println!(
-                    //     "item xyz: {:?}",
-                    //     self.gridstructure.xsites_positions[mmove.from as usize]
-                    // );
-                    // println!("tot energy {}", self.total_energy);
-                    // println!("energy {}", mmove.e_diff);
-                    // println!(
-                    //     "from to {:?}, {:?}",
-                    //     self.atom_pos[mmove.from as usize].nn_atom_type_count,
-                    //     self.atom_pos[mmove.to as usize].nn_atom_type_count
-                    // );
                     self.increment_time(k_tot, &mut rng_choose);
 
                     self.perform_move(mmove.from, mmove.to, mmove.e_diff, is_recording_sections);
@@ -520,9 +477,8 @@ impl Simulation {
             }
 
             if SAVE_ENTIRE_SIM || is_recording_sections {
-                (temp_energy_section, temp_surface_composition) = self.save_sections(
+                temp_surface_composition = self.save_sections(
                     &iiter,
-                    temp_energy_section,
                     temp_surface_composition,
                     &mut temp_cn_dict_section,
                     section_size,
@@ -600,14 +556,14 @@ impl Simulation {
     fn save_sections(
         &mut self,
         iiter: &u64,
-        mut temp_energy_section: f64,
+        // mut temp_energy_section: f64,
         mut temp_surface_composition: f64,
         temp_cn_dict_section: &mut [u64; CN + 1],
         section_size: u64,
         SAVE_TH: u64,
-    ) -> (f64, f64) {
+    ) -> f64 {
         if (iiter + 1) % SAVE_TH == 0 {
-            temp_energy_section += self.total_energy;
+            // temp_energy_section += self.total_energy;
             temp_surface_composition += self.surface_count[0] as f64
                 / (self.surface_count[0] + self.surface_count[1]) as f64;
 
@@ -618,8 +574,8 @@ impl Simulation {
         }
 
         if (iiter + 1) % section_size == 0 {
-            self.energy_sections_list
-                .push(temp_energy_section as f64 / (section_size / SAVE_TH) as f64);
+            // self.energy_sections_list
+            //     .push(temp_energy_section as f64 / (section_size / SAVE_TH) as f64);
 
             let mut section: HashMap<u8, f64> = HashMap::new();
             for (k, list) in temp_cn_dict_section.iter_mut().enumerate() {
@@ -634,9 +590,9 @@ impl Simulation {
 
             self.time_per_section.push(self.sim_time);
 
-            return (0., 0.);
+            return (0.);
         }
-        (temp_energy_section, temp_surface_composition)
+        temp_surface_composition
     }
 
     // fn opt_save_lowest_energy(
@@ -715,6 +671,11 @@ impl Simulation {
     fn cond_snap_and_heat_map(&mut self, iiter: &u64) {
         const NUMBER_HEAT_MAP_SECTIONS: u64 = 200;
 
+        if (iiter) % (self.niter / NUMBER_HEAT_MAP_SECTIONS) == 0 {
+            self.calc_total_energy();
+            self.energy_sections_list.push(self.total_energy);
+        }
+
         if let Some(snap_shot_sections) = &mut self.snap_shot_sections {
             if (iiter) % (self.niter / NUMBER_HEAT_MAP_SECTIONS) == 0 {
                 let mut t_vec = vec![0; self.atom_pos.len()];
@@ -736,6 +697,37 @@ impl Simulation {
                 self.heat_map_sections.push(t_vec);
             }
         }
+    }
+
+    fn calc_total_energy(&mut self) -> f64 {
+        let mut new_energy = 0.;
+        for o in self.onlyocc.iter() {
+            let at_support = self.atom_pos[*o as usize].nn_support;
+
+            let energy = self.alphas.e_one_atom(
+                self.atom_pos[*o as usize].cn_metal,
+                self.atom_pos[*o as usize].nn_atom_type_count,
+                self.gridstructure.nn[o].iter().filter_map(|x| {
+                    if self.atom_pos[*x as usize].occ != 255 {
+                        Some(alpha_energy::NnData {
+                            cn_metal: self.atom_pos[*x as usize].cn_metal,
+                            nn_atom_type_count_num_list: self.atom_pos[*x as usize]
+                                .nn_atom_type_count,
+                            atom_type: self.atom_pos[*x as usize].occ as usize,
+                        })
+                    } else {
+                        None
+                    }
+                }),
+                self.atom_pos[*o as usize].occ,
+                at_support,
+                self.support_e,
+            );
+            self.atom_pos[*o as usize].energy = energy;
+            new_energy += energy;
+        }
+        self.total_energy = new_energy;
+        new_energy
     }
 }
 
