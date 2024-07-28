@@ -162,7 +162,8 @@ pub fn e_barrier(prev_e: f64, future_e: f64) -> f64 {
     // assert!(!prev_e.is_nan());
     // println!("future_e: {}", future_e);
     // assert!(!future_e.is_nan());
-    let e_barr_correction = -((offset * (1. - offset) * prev_e.abs() * future_e.abs()).sqrt());
+    let e_barr_correction = -(offset * (1. - offset) * (prev_e.abs() * future_e.abs()).sqrt());
+
     // println!("res: {}", res);
 
     assert!(!e_barr_correction.is_nan());

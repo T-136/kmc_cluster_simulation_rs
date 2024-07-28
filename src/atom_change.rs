@@ -11,7 +11,11 @@ pub const REMOVE_ATOM_TYPE: u8 = 1;
 
 const CN_FOR_INV: u8 = 12;
 // const E_RATIO: f64 = 0.20; 400K
-const E_RATIO_BARR: f64 = 0.1100000;
+
+//rmove
+const E_RATIO_BARR: f64 = 0.0800000;
+//add
+// const E_RATIO_BARR: f64 = 0.1100000;
 
 const CN_E: [f64; 13] = [0., 1., 2., 3., 4., 5., 6., 7., 8., 9., 10., 11., 12.];
 // const CN_E_ADD: [f64; 13] = [12., 11., 10., 6., 9., 8., 6., 5., 4., 3., 2., 1., 0.];
@@ -32,7 +36,7 @@ impl AtomPosChange {
         temperature: f64,
         how: AtomChangeHow,
     ) -> Option<AtomPosChange> {
-        return None;
+        // return None;
         match how {
             AtomChangeHow::Remove | AtomChangeHow::Exchange => {
                 if atom_type == REMOVE_ATOM_TYPE {
