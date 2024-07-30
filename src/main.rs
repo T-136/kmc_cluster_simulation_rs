@@ -2,10 +2,7 @@
 use clap::ArgGroup;
 use clap::Parser;
 use core::panic;
-use csv::Reader;
-use csv::ReaderBuilder;
 use mc::alpha_energy;
-use mc::energy::EnergyInput;
 use mc::GridStructure;
 use mc::Simulation;
 use std::collections::HashMap;
@@ -13,16 +10,17 @@ use std::fs;
 use std::io::BufRead;
 use std::io::BufReader;
 use std::path::Path;
-// use std::io::{self, BufRead};
 use std::sync::Arc;
 use std::thread;
 use std::usize;
 
-use std::convert::TryInto;
-
-fn vec_to_array<T, const N: usize>(v: Vec<T>) -> [T; N] {
-    v.try_into()
-        .unwrap_or_else(|v: Vec<T>| panic!("Expected a Vec of length {} but it was {}", N, v.len()))
+fn prepend<T>(v: Vec<T>, s: &[T]) -> Vec<T>
+where
+    T: Clone,
+{
+    let mut tmp: Vec<_> = s.to_owned();
+    tmp.extend(v);
+    tmp
 }
 
 fn fmt_scient(num: &str) -> u64 {
@@ -34,56 +32,18 @@ fn fmt_scient(num: &str) -> u64 {
         panic!("wrong iterations input");
     }
 
-    let base: u64 = 10;
-    pre_num.parse::<u64>().expect("wrong iterations input")
-        * base.pow(exp.parse::<u32>().expect("wrong iterations input"))
-}
-
-fn collect_energy_values<const N: usize>(
-    mut energy_vec: [i64; N],
-    inp: String,
-) -> (Vec<[i64; N]>, HashMap<String, u8>) {
-    if inp.chars().next().unwrap().is_numeric() || inp.starts_with('-') {
-        let mut string_iter = inp.trim().split(',');
-        for x in energy_vec.iter_mut() {
-            *x = string_iter
-                .next()
-                .unwrap()
-                .trim()
-                .parse::<i64>()
-                .unwrap_or_else(|err| {
-                    panic!(
-                        "iter received from input file: {:?}, err: {}",
-                        string_iter, err
-                    )
-                });
-        }
-        let mut map: HashMap<String, u8> = HashMap::new();
-        map.insert("Pt".to_string(), 1_u8);
-        (vec![energy_vec], map)
+    let mut prenum_parts = pre_num.split('.');
+    let _ = prenum_parts.next().unwrap();
+    let after_dot_count = if let Some(y) = prenum_parts.next() {
+        y.len()
     } else {
-        // let s = fs::read_to_string(inp.clone()).expect("can't find energy file");
-        let file = fs::File::open(inp).expect("can't find energy file");
-        let reader = BufReader::new(file);
-        // let res: Result<Results, serde_json::Error> = serde_json::from_reader(reader);
-        let res: Result<HashMap<String, Vec<i64>, fnv::FnvBuildHasher>, serde_json::Error> =
-            serde_json::from_reader(reader);
-        println!("{:?}", res);
+        0
+    };
+    let new_pre_num = pre_num.replace('.', "");
 
-        let mut energy_vec = Vec::new();
-
-        let mut atom_names: HashMap<String, u8> = HashMap::new();
-        // println!("{:?}", record);
-
-        for (i, (atom_name, energy_line)) in res.unwrap().into_iter().enumerate() {
-            println!("{:?}", energy_line);
-
-            atom_names.insert(atom_name, i as u8 + 1);
-            energy_vec.push(vec_to_array(energy_line));
-        }
-
-        (energy_vec, atom_names)
-    }
+    let base: u64 = 10;
+    new_pre_num.parse::<u64>().expect("wrong iterations input")
+        * base.pow(exp.parse::<u32>().expect("wrong iterations input") - after_dot_count as u32)
 }
 
 #[derive(Parser, Debug)]
@@ -94,74 +54,70 @@ fn collect_energy_values<const N: usize>(
     ))]
 struct StartStructure {
     #[arg(short, long)]
+    /// xyz file
     start_cluster: Option<String>,
 
     #[arg(short, long, value_delimiter = ',')]
+    /// number of atoms
     atoms_input: Option<Vec<u32>>,
 }
 
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]
-// #[clap(group(
-//         ArgGroup::new("energy")
-//             .multiple(true)
-//             .required(true)
-//             .args(&["e_l_cn", "e_cn", "e_l_gcn", "e_gcn", "alphas"]),
-//     ))]
 struct Args {
     #[clap(flatten)]
     start_structure: StartStructure,
 
-    /// folder to store results
     #[arg(short, long, default_value_t = String::from("./sim/"))]
+    /// folder to store results
     folder: String,
 
-    /// iterations
     #[arg(short, long)]
+    /// acceptes integer and scientific formats e.g. 1E10 or 1.5E10
     iterations: String,
 
     #[arg(short, long, default_value_t = 300.)]
+    /// temperature at which the sumulation is run, currently the temperature has to be constatn
+    /// throughout the simulation
     temperature: f64,
 
-    // #[arg(long, allow_hyphen_values(true))]
-    // e_l_cn: Option<String>,
-    //
-    // #[arg(long, allow_hyphen_values(true))]
-    // e_cn: Option<String>,
-    //
-    // #[arg(long, allow_hyphen_values(true))]
-    // e_l_gcn: Option<String>,
-    //
-    // #[arg(long, allow_hyphen_values(true))]
-    // e_gcn: Option<String>,
     #[arg(long)]
+    /// path to the file with the alpha values. File name has to conatain the metals names in
+    /// coorect order in the first parte of the file name before the ".", seperated by "_" e.g. Pt_Pd.bat
     alphas: String,
 
-    #[arg(short, long, value_delimiter = '-', default_values_t = vec!(0,1))]
+    #[arg(short, long, value_delimiter = '-', default_values_t = vec!(1))]
+    /// How often the simulation should be repeated. This can be used to make sure the result is representative. 
+    /// The input can be the number of threads e.g. 5.
+    /// Each run will be started in a seperated thread.
+    /// The loaded grid_folder-files will only be loaded once and used by all threads meaning the memory
+    /// increase is minimal for addidtional simulation runs.
+    /// Alternativley the input can be a range e.g. 5-10. This is usefull because the thread number is part of the simulation name.
     repetition: Vec<usize>,
 
     #[arg(short, long, value_delimiter = ',', allow_hyphen_values(true))]
+    /// freez a boarder in one ore multiple directions. Directions are given by x, y, z, -x, -y or -z.
     freeze: Option<Vec<String>>,
 
     #[arg(long, allow_hyphen_values(true))]
+    /// support energy. not supported yet.
     support_e: Option<i64>,
 
-    #[arg(short, long, default_value_t = String::from("../999-pair/"))]
+    #[arg(short, long, default_value_t = String::from("../303030-pair_kmc/"))]
+    /// folder which contains the files for the grid previously build using the python scipt.
     grid_folder: String,
 
-    // #[arg(short, long, default_value_t = String::from("../input_cluster/bulk.poscar"))]
-    // core_file: String,
-    //
     #[arg(short, long, default_value_t = false)]
+    /// writes a file with the cluster every x iterations.
     write_snap_shots: bool,
 
-    #[arg(long, default_value_t = false)]
-    heat_map: bool,
-
     #[arg(long)]
+    /// adds one layer of atoms arround the cluster. Input muust be the atom e.g. "Pt".
     coating: Option<String>,
 
     #[arg(short, long, value_delimiter = '/', default_values_t = vec!(1,2))]
+    /// fraction of the simulationtime where the programm starts looking for the structure with the
+    /// lowest energy
     optimization_cut_off_fraction: Vec<u64>,
 }
 
@@ -204,7 +160,6 @@ use std::env;
 fn main() {
     // enable_data_collection(true);
     env::set_var("RUST_BACKTRACE", "1");
-    println!("determined next-nearest neighbor list");
 
     let args = Args::parse();
     let save_folder: String = args.folder;
@@ -242,33 +197,18 @@ fn main() {
     let niter_str = args.iterations;
     let niter = fmt_scient(&niter_str);
     let mut write_snap_shots: bool = args.write_snap_shots;
-    let heat_map: bool = args.heat_map;
-    if heat_map {
-        write_snap_shots = true;
-    }
     // let bulk_file_name: String = args.core_file;
     let optimization_cut_off_fraction: Vec<u64> = args.optimization_cut_off_fraction;
     let repetition = args.repetition;
 
+    let repetition = if repetition.len() == 1 {
+        prepend(repetition, &[0])
+    } else {
+        repetition
+    };
+
     let mut atom_names: HashMap<String, u8> = HashMap::new();
-    let energy = EnergyInput::Gcn(vec![[0_i64; 145]]);
-    // let (energy, mut atom_names) = if args.e_l_cn.is_some() {
-    //     let (energy, atom_names) = collect_energy_values([0; 2], args.e_l_cn.unwrap());
-    //     (EnergyInput::LinearCn(energy), atom_names)
-    // } else if args.e_cn.is_some() {
-    //     let (energy, atom_names) = collect_energy_values([0; 13], args.e_cn.unwrap());
-    //     (EnergyInput::Cn(energy), atom_names)
-    // } else if args.e_l_gcn.is_some() {
-    //     let (energy, atom_names) = collect_energy_values([0; 2], args.e_l_gcn.unwrap());
-    //     (EnergyInput::LinearGcn(energy), atom_names)
-    // } else if args.e_gcn.is_some() {
-    //     let (energy, atom_names) = collect_energy_values([0; 145], args.e_gcn.unwrap());
-    //     (EnergyInput::Gcn(energy), atom_names)
-    // } else {
-    //     panic!("no energy")
-    // };
-    //
-    // println!("energy: {:?}", energy);
+
     println!("{:?}", repetition);
     let mut handle_vec = Vec::new();
 
@@ -286,12 +226,10 @@ fn main() {
     // atom_names.insert("Pd".to_string(), 2);
     atom_names.insert("Al".to_string(), 100);
 
-    // let alphas_file = "Pt_Pd.bat".to_string();
     let alphas_file = args.alphas;
     let alphas_arr = read_alphas(alphas_file, &mut atom_names);
     println!("{:?}", alphas_arr);
     let alphas = alpha_energy::Alphas::new(alphas_arr);
-    // let alphas = alpha_energy::Alphas::new(alpha_energy::energy_const);
     println!(
         "alphas: {:?} \n sum alphas: {:?}",
         alphas.cn, alphas.summed_to_x
@@ -318,7 +256,6 @@ fn main() {
                 temperature,
                 save_folder,
                 write_snap_shots,
-                heat_map,
                 rep,
                 optimization_cut_off_fraction,
                 alphas_arc,
@@ -388,13 +325,6 @@ fn read_alphas(alphas_file: String, atom_names: &mut HashMap<String, u8>) -> [[[
     alphas
 }
 
-// fn alphas_read_one_section(line_index: usize, section: usize,  line: String, alphas: &mut [[[0.; 12]; 2]; 2]) {
-//             if line_index >= LINE_COUNT * section - 2 {
-//                 continue;
-//             }
-//             alphas[0][1][i - LINE_COUNT * (section-1)] = line.parse::<f64>().unwrap();
-//
-// }
 
 #[cfg(test)]
 mod tests {

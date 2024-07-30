@@ -5,7 +5,6 @@ use std::collections::HashMap;
 use std::collections::HashSet;
 use std::fs;
 use std::io::{self, BufRead};
-use time_graph::instrument;
 
 use crate::grid_structure::{NN_PAIR_NO_INTERSEC_NUMBER, NN_PAIR_ONLY_INTERSEC_NUMBER};
 
@@ -56,7 +55,6 @@ pub fn write_occ_as_xyz(
         .unwrap_or_else(|x| eprintln!("{}", x));
 }
 
-#[instrument]
 pub fn read_sample(input_file: &str) -> Vec<(String, [f64; 3])> {
     // if input_file.contains(".poscar") {
     //     let newatoms = Poscar::from_path(input_file).unwrap();

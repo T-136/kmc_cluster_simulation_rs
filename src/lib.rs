@@ -6,7 +6,6 @@ use rand;
 use rand::distributions::{Distribution, Uniform};
 use rand::prelude::*;
 use rand::rngs::SmallRng;
-use rayon::prelude::*;
 use std::collections::hash_map::Entry;
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::fs::File;
@@ -113,9 +112,7 @@ pub struct Simulation {
     energy_sections_list: Vec<f64>,
     surface_composition: Vec<f64>,
     optimization_cut_off_fraction: Vec<u64>,
-    heat_map: Option<Vec<u64>>,
     snap_shot_sections: Option<Vec<Vec<u8>>>,
-    heat_map_sections: Vec<Vec<u64>>,
     alphas: Arc<Alphas>,
     gridstructure: Arc<GridStructure>,
     support_e: i64,
@@ -132,7 +129,6 @@ impl Simulation {
         temperature: f64,
         save_folder_name: String,
         write_snap_shots: bool,
-        is_heat_map: bool,
         repetition: usize,
         optimization_cut_off_fraction: Vec<u64>,
         alphas: Arc<Alphas>,
@@ -251,13 +247,6 @@ impl Simulation {
             None
         };
 
-        let heat_map: Option<Vec<u64>> = if is_heat_map {
-            Some(vec![0; nsites as usize])
-        } else {
-            None
-        };
-
-        let heat_map_sections: Vec<Vec<u64>> = Vec::new();
 
         let mut time_per_section: Vec<f64> = Vec::new();
         let mut surface_composition: Vec<f64> = Vec::new();
@@ -301,8 +290,6 @@ impl Simulation {
             surface_count,
             optimization_cut_off_fraction,
             snap_shot_sections,
-            heat_map,
-            heat_map_sections,
             alphas,
             gridstructure,
             // neighboring_atom_type_count,
@@ -462,10 +449,6 @@ impl Simulation {
                     self.update_moves(mmove.from, mmove.to);
                     self.update_possible_moves(mmove.from, mmove.to);
                     self.update_add_remove(mmove.from, mmove.to, &how);
-                    if let Some(map) = &mut self.heat_map {
-                        map[mmove.to as usize] += 1;
-                        map[mmove.from as usize] += 1;
-                    }
                 }
                 ItemEnum::AddOrRemove(change) => {
                     println!("change something");
@@ -487,7 +470,6 @@ impl Simulation {
             }
         }
 
-        println!("heatmap section len: {:?}", self.heat_map_sections.len());
 
         read_and_write::write_occ_as_xyz(
             self.save_folder.clone(),
@@ -498,14 +480,6 @@ impl Simulation {
             &self.atom_names,
         );
 
-        if self.heat_map.is_some() {
-            let mut wtr = Writer::from_path(self.save_folder.clone() + "/heat_map.csv").unwrap();
-            for heat_section in &self.heat_map_sections {
-                wtr.write_record(heat_section.iter().map(|x| x.to_string()))
-                    .unwrap();
-            }
-            wtr.flush().unwrap();
-        }
 
         if self.snap_shot_sections.is_some() {
             let mut wtr =
@@ -687,16 +661,6 @@ impl Simulation {
             }
         }
 
-        if let Some(heat_map) = &mut self.heat_map {
-            if (iiter) % (self.niter / NUMBER_HEAT_MAP_SECTIONS) == 0 {
-                let mut t_vec = vec![0; heat_map.len()];
-                t_vec
-                    .iter_mut()
-                    .enumerate()
-                    .for_each(|(i, x)| *x = heat_map[i]);
-                self.heat_map_sections.push(t_vec);
-            }
-        }
     }
 
     fn calc_total_energy(&mut self) -> f64 {
@@ -833,7 +797,6 @@ mod tests {
             nn_file,
             nnn_file,
             nn_pairlist_file,
-            // nnn_pairlist_file,
             atom_sites,
             nn_pair_no_int_file,
             nnn_pair_no_int_file,
@@ -842,9 +805,7 @@ mod tests {
 
         let gridstructure = GridStructure::new(
             nn_file,
-            // nnn_file,
             nn_pair_no_int_file,
-            // nnn_pair_no_int_file,
             atom_sites,
             bulk_file_name,
             surrounding_moves_file,
@@ -862,11 +823,10 @@ mod tests {
         let mut sim = Simulation::new(
             atom_names,
             1000000,
-            Some("./711A.xyz".to_string()),
+            Some("./711A/711A.xyz".to_string()),
             None,
             900.,
             String::from("./sim/"),
-            false,
             false,
             0_usize,
             vec![4, 4],
