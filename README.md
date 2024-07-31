@@ -1,4 +1,4 @@
-# kmc_cluster_simulation_rs
+# kMC cluster simulation
 
 This kinetic Monte-Carlo simulation uses [alpha energies](https://pubs.acs.org/doi/abs/10.1021/acscatal.3c04337) to simulate the structural changes of nanoparticles alloys.  
 
