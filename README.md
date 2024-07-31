@@ -6,9 +6,9 @@ This kinetic Monte-Carlo simulation uses [alpha energies](https://pubs.acs.org/d
 
 ## Requirements
 
-[Rust](https://www.rust-lang.org/tools/install)
-[Python](https://www.python.org/)
-[ASE](https://wiki.fysik.dtu.dk/ase/) *used version: ase-3.22.1*
+- [Rust](https://www.rust-lang.org/tools/install)
+- [Python](https://www.python.org/)
+- [ASE](https://wiki.fysik.dtu.dk/ase/) *used version: ase-3.22.1*
 
 
 ## Install from git 
