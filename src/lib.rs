@@ -348,7 +348,7 @@ impl Simulation {
             );
             if let Some(pos_change) = pos_change {
                 self.possible_moves
-                    .cond_add_item(ItemEnum::AddOrRemove(pos_change));
+                    .cond_add_item(ItemEnum::AddOrRemove(pos_change), 0.);
             }
             if o.occ != 255 && o.occ != 100 {
                 for u in &self.gridstructure.nn[&(i as u32)] {
@@ -361,15 +361,15 @@ impl Simulation {
                             let (prev_e, future_e) =
                                 self.calc_energy_change_by_move(i as u32, *u, o.occ);
                             let e_barr = alpha_energy::e_barrier(prev_e, future_e);
-                            let mmove = moves::Move::new(
-                                i as u32,
-                                *u,
+                            let mmove = moves::Move{
+                                from: i as u32,
+                                to: *u,
+                                e_diff: future_e - prev_e,
                                 e_barr,
-                                future_e - prev_e,
-                                self.temperature,
-                            );
+                            };
+                            let k = moves::tst_rate_calculation(future_e - prev_e, e_barr, self.temperature);
                             assert!(self.atom_pos[i as usize].occ != 255);
-                            self.possible_moves.cond_add_item(ItemEnum::Move(mmove))
+                            self.possible_moves.cond_add_item(ItemEnum::Move(mmove), k)
                         }
                     }
                 }
@@ -851,7 +851,7 @@ mod tests {
             );
             if let Some(pos_change) = pos_change {
                 sim.possible_moves
-                    .cond_add_item(ItemEnum::AddOrRemove(pos_change));
+                    .cond_add_item(ItemEnum::AddOrRemove(pos_change), 0.);
             }
             if o.occ != 255 && o.occ != 100 {
                 for u in &sim.gridstructure.nn[&(i as u32)] {
@@ -864,15 +864,15 @@ mod tests {
                             let (prev_e, future_e) =
                                 sim.calc_energy_change_by_move(i as u32, *u, o.occ);
                             let e_barr = alpha_energy::e_barrier(prev_e, future_e);
-                            let mmove = moves::Move::new(
-                                i as u32,
-                                *u,
+                            let mmove = moves::Move{
+                                from: i as u32,
+                                to: *u,
+                                e_diff: future_e - prev_e,
                                 e_barr,
-                                future_e - prev_e,
-                                sim.temperature,
-                            );
+                            };
+                            let k = moves::tst_rate_calculation(future_e - prev_e, e_barr, sim.temperature);
                             assert!(sim.atom_pos[i as usize].occ != 255);
-                            sim.possible_moves.cond_add_item(ItemEnum::Move(mmove))
+                            sim.possible_moves.cond_add_item(ItemEnum::Move(mmove), k)
                         }
                     }
                 }

@@ -24,7 +24,7 @@ const CN_E_ADD: [f64; 13] = [12., 11., 9., 9., 4., 9., 9., 9., 9., 9., 90., 1000
 #[derive(Clone, Debug)]
 pub struct AtomPosChange {
     pub pos: u32,
-    pub k: f64,
+    // pub k: f64,
     pub how: AtomChangeHow,
 }
 
@@ -36,27 +36,27 @@ impl AtomPosChange {
         temperature: f64,
         how: AtomChangeHow,
     ) -> Option<AtomPosChange> {
-        // return None;
-        match how {
-            AtomChangeHow::Remove | AtomChangeHow::Exchange => {
-                if atom_type == REMOVE_ATOM_TYPE {
-                    let k = tst_rate_calculation(cn as f64 * E_RATIO_BARR, temperature);
-                    return Some(AtomPosChange { pos, k, how });
-                }
-            }
-            AtomChangeHow::Add => {
-                if atom_type == 255 {
-                    let k = if cn == 0 {
-                        tst_rate_calculation((100) as f64 * E_RATIO_BARR, temperature)
-                    } else {
-                        tst_rate_calculation(CN_E_ADD[cn as usize] * E_RATIO_BARR, temperature)
-                    };
-                    // println!("k of change {}", k);
-                    return Some(AtomPosChange { pos, k, how });
-                }
-            }
-            AtomChangeHow::RemoveAndAdd => todo!(),
-        }
+        return None;
+        // match how {
+        //     AtomChangeHow::Remove | AtomChangeHow::Exchange => {
+        //         if atom_type == REMOVE_ATOM_TYPE {
+        //             let k = tst_rate_calculation(cn as f64 * E_RATIO_BARR, temperature);
+        //             return Some(AtomPosChange { pos, k, how });
+        //         }
+        //     }
+        //     AtomChangeHow::Add => {
+        //         if atom_type == 255 {
+        //             let k = if cn == 0 {
+        //                 tst_rate_calculation((100) as f64 * E_RATIO_BARR, temperature)
+        //             } else {
+        //                 tst_rate_calculation(CN_E_ADD[cn as usize] * E_RATIO_BARR, temperature)
+        //             };
+        //             // println!("k of change {}", k);
+        //             return Some(AtomPosChange { pos, k, how });
+        //         }
+        //     }
+        //     AtomChangeHow::RemoveAndAdd => todo!(),
+        // }
 
         None
     }
@@ -342,15 +342,15 @@ impl crate::Simulation {
                             let e_barr = alpha_energy::e_barrier(prev_e, future_e);
                             assert!(self.atom_pos[nn_to_pos as usize].occ != 100);
 
-                            let mmove = moves::Move::new(
-                                nn_to_pos,
-                                pos,
+                            let mmove = moves::Move{
+                                from: nn_to_pos,
+                                to: pos,
+                                e_diff: future_e - prev_e,
                                 e_barr,
-                                future_e - prev_e,
-                                self.temperature,
-                            );
+                            };
+                            let k = moves::tst_rate_calculation(future_e - prev_e, e_barr, self.temperature);
                             self.possible_moves
-                                .cond_add_item(crate::ItemEnum::Move(mmove));
+                                .cond_add_item(crate::ItemEnum::Move(mmove), k);
                         }
                     }
                 }
@@ -376,15 +376,15 @@ impl crate::Simulation {
                             );
                             let e_barr = alpha_energy::e_barrier(prev_e, future_e);
                             assert!(self.atom_pos[pos as usize].occ != 100);
-                            let mmove = moves::Move::new(
-                                pos,
-                                nn_to_atom,
+                            let mmove = moves::Move{
+                                from: pos,
+                                to: nn_to_atom,
+                                e_diff: future_e - prev_e,
                                 e_barr,
-                                future_e - prev_e,
-                                self.temperature,
-                            );
+                            };
+                            let k = moves::tst_rate_calculation(future_e - prev_e, e_barr, self.temperature);
                             self.possible_moves
-                                .cond_add_item(crate::ItemEnum::Move(mmove));
+                                .cond_add_item(crate::ItemEnum::Move(mmove), k);
                         }
                     }
                 }
@@ -419,9 +419,10 @@ impl crate::Simulation {
                     self.calc_energy_change_by_move(full, empty, self.atom_pos[full as usize].occ);
                 let e_barr = alpha_energy::e_barrier(prev_e, future_e);
                 let mmove =
-                    moves::Move::new(full, empty, e_barr, future_e - prev_e, self.temperature);
+                    moves::Move{from: full, to: empty, e_diff: future_e - prev_e, e_barr};
+                let k = moves::tst_rate_calculation(future_e - prev_e, e_barr, self.temperature);
                 self.possible_moves
-                    .update_k_if_item_exists(crate::ItemEnum::Move(mmove));
+                    .update_k_if_item_exists(crate::ItemEnum::Move(mmove), k);
             }
         }
     }
@@ -440,7 +441,7 @@ impl crate::Simulation {
                     );
                     if let Some(pos) = pos {
                         self.possible_moves
-                            .update_k_if_item_exists(crate::ItemEnum::AddOrRemove(pos));
+                            .update_k_if_item_exists(crate::ItemEnum::AddOrRemove(pos), 0.);
                     }
                 }
             }
@@ -459,7 +460,7 @@ impl crate::Simulation {
                     );
                     if let Some(pos) = pos {
                         self.possible_moves
-                            .cond_add_item(crate::ItemEnum::AddOrRemove(pos));
+                            .cond_add_item(crate::ItemEnum::AddOrRemove(pos), 0.);
                     }
 
                     // maybe not necessary if prev does it

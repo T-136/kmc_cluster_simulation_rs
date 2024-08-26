@@ -13,20 +13,20 @@ pub struct Move {
     pub to: u32,
     pub e_diff: f64,
     pub e_barr: f64,
-    pub k: f64,
+    // pub k: f64,
 }
 
-impl Move {
-    pub fn new(from: u32, to: u32, e_barr: f64, e_diff: f64, temperature: f64) -> Move {
-        Move {
-            from,
-            to,
-            e_diff,
-            e_barr,
-            k: tst_rate_calculation(e_diff, e_barr, temperature),
-        }
-    }
-}
+// impl Move {
+//     pub fn new(from: u32, to: u32, e_barr: f64, e_diff: f64, temperature: f64) -> Move {
+//         Move {
+//             from,
+//             to,
+//             e_diff,
+//             e_barr,
+//             k: tst_rate_calculation(e_diff, e_barr, temperature),
+//         }
+//     }
+// }
 
 pub fn tst_rate_calculation(e_diff: f64, e_barr: f64, temperature: f64) -> f64 {
     // let e_use = if e_diff.is_negative() { 0. } else { e_diff };
@@ -153,10 +153,11 @@ impl crate::Simulation {
                     self.atom_pos[pos.0 as usize].occ,
                 );
                 let e_barr = alpha_energy::e_barrier(prev_e, future_e);
-                let mmove = Move::new(pos.0, pos.1, e_barr, future_e - prev_e, self.temperature);
+                let mmove = Move{from: pos.0, to:pos.1, e_diff: future_e - prev_e, e_barr};
+                let k = tst_rate_calculation(future_e - prev_e, e_barr, self.temperature);
                 assert!(self.atom_pos[pos.0 as usize].occ != 255);
                 self.possible_moves
-                    .update_k_if_item_exists(ItemEnum::Move(mmove));
+                    .update_k_if_item_exists(ItemEnum::Move(mmove), k);
             }
             if self.atom_pos[pos.1 as usize].occ != 100
                 && self.atom_pos[pos.1 as usize].occ != 255
@@ -168,10 +169,11 @@ impl crate::Simulation {
                     self.atom_pos[pos.1 as usize].occ,
                 );
                 let e_barr = alpha_energy::e_barrier(prev_e, future_e);
-                let mmove = Move::new(pos.1, pos.0, e_barr, future_e - prev_e, self.temperature);
+                let mmove = Move{from: pos.1, to: pos.0, e_diff: future_e - prev_e, e_barr};
                 assert!(self.atom_pos[pos.1 as usize].occ != 255);
+                let k = tst_rate_calculation(future_e - prev_e, e_barr, self.temperature);
                 self.possible_moves
-                    .update_k_if_item_exists(ItemEnum::Move(mmove));
+                    .update_k_if_item_exists(ItemEnum::Move(mmove), k);
             }
         }
     }
@@ -196,15 +198,15 @@ impl crate::Simulation {
                     );
                     let e_barr = alpha_energy::e_barrier(prev_e, future_e);
                     assert!(self.atom_pos[move_to as usize].occ != 255);
-                    let mmove = moves::Move::new(
-                        nn_to_from,
-                        move_from,
+                    let mmove = moves::Move{
+                        from: nn_to_from,
+                        to: move_from,
+                        e_diff: future_e - prev_e,
                         e_barr,
-                        future_e - prev_e,
-                        self.temperature,
-                    );
+                    };
+                    let k = moves::tst_rate_calculation(future_e - prev_e, e_barr, self.temperature);
                     assert!(self.atom_pos[nn_to_from as usize].occ != 255);
-                    self.possible_moves.cond_add_item(ItemEnum::Move(mmove));
+                    self.possible_moves.cond_add_item(ItemEnum::Move(mmove), k);
                 }
             }
         }
@@ -227,15 +229,15 @@ impl crate::Simulation {
                     );
                     let e_barr = alpha_energy::e_barrier(prev_e, future_e);
                     assert!(self.atom_pos[move_to as usize].occ != 255);
-                    let mmove = moves::Move::new(
-                        move_to,
-                        nn_to_to,
+                    let mmove = moves::Move{
+                        from: move_to,
+                        to: nn_to_to,
+                        e_diff: future_e - prev_e,
                         e_barr,
-                        future_e - prev_e,
-                        self.temperature,
-                    );
+                    };
+                    let k = tst_rate_calculation(future_e - prev_e, e_barr, self.temperature);
                     assert!(self.atom_pos[move_to as usize].occ != 255);
-                    self.possible_moves.cond_add_item(ItemEnum::Move(mmove));
+                    self.possible_moves.cond_add_item(ItemEnum::Move(mmove), k);
                 }
             }
         }
@@ -271,7 +273,7 @@ impl crate::Simulation {
         };
         if let Some(pos_change) = pos_change {
             self.possible_moves
-                .cond_add_item(ItemEnum::AddOrRemove(pos_change));
+                .cond_add_item(ItemEnum::AddOrRemove(pos_change), 0.);
         }
         for x in from_change {
             let pos_change = atom_change::AtomPosChange::new(
@@ -283,7 +285,7 @@ impl crate::Simulation {
             );
             if let Some(pos_change) = pos_change {
                 self.possible_moves
-                    .update_k_if_item_exists(ItemEnum::AddOrRemove(pos_change));
+                    .update_k_if_item_exists(ItemEnum::AddOrRemove(pos_change), 0.);
             }
         }
         for x in to_change {
@@ -296,7 +298,7 @@ impl crate::Simulation {
             );
             if let Some(pos_change) = pos_change {
                 self.possible_moves
-                    .update_k_if_item_exists(ItemEnum::AddOrRemove(pos_change));
+                    .update_k_if_item_exists(ItemEnum::AddOrRemove(pos_change), 0.);
             }
         }
     }
