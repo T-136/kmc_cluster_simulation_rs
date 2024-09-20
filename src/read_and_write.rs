@@ -324,39 +324,3 @@ pub fn read_nn_pairlists(
     return nn_pair;
 }
 
-pub fn read_nnn_pairlists(nn_pairlist_file: &str) -> HashMap<u64, [u32; 74], FnvBuildHasher> {
-    let nn_pairlist =
-        fs::File::open(nn_pairlist_file).expect("Should have been able to read the file");
-
-    let lines = io::BufReader::new(nn_pairlist);
-
-    let mut nn_pair: HashMap<u64, [u32; 74], FnvBuildHasher> =
-        FnvHashMap::with_capacity_and_hasher(32000, Default::default());
-
-    for line in lines.lines() {
-        let r = line.unwrap();
-        let test: Vec<&str> = r.split_whitespace().clone().collect();
-        let site: u32 = std::cmp::min(
-            test[0].parse::<u32>().unwrap(),
-            test[1].parse::<u32>().unwrap(),
-        );
-        let j: u32 = std::cmp::max(
-            test[0].parse::<u32>().unwrap(),
-            test[1].parse::<u32>().unwrap(),
-        );
-        let mut neighbors: [u32; 74] = [0; 74];
-
-        for (i, l) in test.iter().skip(2).enumerate() {
-            neighbors[i] = l.parse::<u32>().unwrap()
-        }
-        nn_pair
-            // .entry()
-            // .and_modify(|map| {
-            //     map.insert(j, neighbors.clone());
-            // })
-            .insert(site as u64 + ((j as u64) << 32), neighbors);
-        // println!("{:?}", line.unwrap());
-    }
-
-    return nn_pair;
-}

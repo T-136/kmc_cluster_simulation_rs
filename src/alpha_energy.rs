@@ -1,14 +1,6 @@
-// fn morse_pot(tot_e: f64, dist: f64) -> f64 {
-//     let a = 1.;
-//     let x: f64 = (-a * dist);
-//     // let x: f64 = 0.7;
-//     let res = tot_e * (1. - x.exp()).powi(2) - tot_e;
-//     res
-// }
-
 #[derive(Clone, Debug)]
 pub struct Alphas {
-    //atom_type_index;in_atom_type_index;cn-1
+    ///atom_type_index;in_atom_type_index;cn-1
     pub cn: [[[f64; 12]; super::NUM_ATOM_TYPES]; super::NUM_ATOM_TYPES],
     pub summed_to_x: [[[f64; 12]; super::NUM_ATOM_TYPES]; super::NUM_ATOM_TYPES],
 }
@@ -150,6 +142,8 @@ impl Alphas {
     }
 }
 
+
+#[derive(Clone, Debug)]
 pub struct NnData {
     pub cn_metal: u8,
     pub nn_atom_type_count_num_list: [u8; super::NUM_ATOM_TYPES],
@@ -158,16 +152,11 @@ pub struct NnData {
 
 pub fn e_barrier(prev_e: f64, future_e: f64) -> f64 {
     const offset: f64 = 0.7;
-    // println!("prev_e: {}", prev_e);
-    // assert!(!prev_e.is_nan());
-    // println!("future_e: {}", future_e);
-    // assert!(!future_e.is_nan());
     let e_barr_correction = -(offset * (1. - offset) * (prev_e.abs() * future_e.abs()).sqrt());
-
-    // println!("res: {}", res);
 
     assert!(!e_barr_correction.is_nan());
     (prev_e - e_barr_correction).abs()
+    // (prev_e - future_e).abs()
 }
 
 #[cfg(test)]
@@ -202,7 +191,11 @@ mod tests {
 
     #[test]
     fn test_e_summed() {
-        let alphas_inp = [alpha_pt, alpha_pd];
+
+        let mut atom_names: std::collections::HashMap<String, u8> = std::collections::HashMap::new();
+        let alpha_file: String = "./Pt_Pd.6.bat".to_string();
+        let alphas_inp = super::super::read_alphas(alpha_file, &mut atom_names);
+        // let alphas_inp = [alpha_pt, alpha_pd];
         let alphas = Alphas::new(alphas_inp);
 
         let mut summed_alphas = 0.;
@@ -220,5 +213,49 @@ mod tests {
                 - summed_alphas
                 < 0.00001
         )
+    }
+
+    #[test]
+    fn test_show_alphas() {
+        let mut atom_names: std::collections::HashMap<String, u8> = std::collections::HashMap::new();
+        let alpha_file: String = "./Pt_Pd.6.bat".to_string();
+        let alphas_inp = super::super::read_alphas(alpha_file, &mut atom_names);
+        // let alphas_inp = [alpha_pt, alpha_pd];
+        let alphas = Alphas::new(alphas_inp);
+
+        struct TestPositin  {
+        cn_metal: u8,
+        nn_atom_type_count: [u8; super::super::NUM_ATOM_TYPES],
+        nn_nn_atom_type_count: [NnData],
+        }
+
+        
+        let nn_nn_atom_bulk = NnData {
+            cn_metal: 12,
+            nn_atom_type_count_num_list: [12,0],
+            atom_type: 0,
+        };
+
+        let mut nn_nn_atom_type_count: Vec<NnData> = Vec::new();
+        for _ in 0..=7 {
+            nn_nn_atom_type_count.push(nn_nn_atom_bulk.clone());
+        }
+
+        let start_e = alphas.e_one_atom(11, [11,0], nn_nn_atom_type_count.into_iter(), 0, 0, 0);
+        let tst_e = alphas.e_one_atom_tst(4, [4,0], 0, 0, 0);
+        let barr = super::e_barrier(start_e-tst_e, start_e-tst_e);
+
+        
+
+        let mut atom_0 = "";
+        for ( atom_name, index) in atom_names.iter(){
+            if index == &0 {
+                atom_0 =  atom_name;
+            }
+
+        }
+
+        println!("move in bulk of {}: {}", atom_0, barr);
+
     }
 }

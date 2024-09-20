@@ -2,8 +2,6 @@ use core::panic;
 use rand::distributions::{Distribution, Uniform};
 use rand::rngs::SmallRng;
 use std::collections::HashMap;
-use std::mem;
-use std::{cell::RefCell, rc::Rc};
 
 use super::atom_change;
 use super::moves;
@@ -26,19 +24,6 @@ impl ItemEnum {
             }
         }
     }
-
-    // pub fn get_k(&self) -> f64 {
-    //     match self {
-    //         ItemEnum::Move(mmove) => mmove.k,
-    //         ItemEnum::AddOrRemove(add_or_remove) => add_or_remove.k,
-    //     }
-    // }
-    // fn update_k(&mut self, k: f64) {
-    //     match self {
-    //         ItemEnum::Move(mmove) => mmove.k = k,
-    //         ItemEnum::AddOrRemove(add_or_remove) => add_or_remove.k = k,
-    //     }
-    // }
 }
 
 #[derive(Clone, Debug, Default)]
@@ -57,8 +42,8 @@ impl Bucket {
         {
             self.edit_counter = 0;
             
-            self.own_k = moves::simd_sum(&self.k_s);
-            // self.own_k = self.k_s.iter().sum::<f64>();
+            // self.own_k = moves::simd_sum(&self.k_s);
+            self.own_k = self.k_s.iter().sum::<f64>();
         }
     }
 }
@@ -283,7 +268,7 @@ impl Buckets {
     }
 
     pub fn update_k_if_item_exists(&mut self, item: ItemEnum, k: f64) {
-        let item_id = item.get_id();
+        // let item_id = item.get_id();
         match item {
             ItemEnum::Move(mmove) => {
                 if self.remove_move(mmove.from, mmove.to) {
@@ -327,6 +312,7 @@ impl Buckets {
         if Uniform::new_inclusive(0., 2_f64.powi(bucket.bucket_power)).sample(coin_toss)
             < bucket.k_s[pick]
         {
+            // println!("k: {}", bucket.k_s[pick]);
             Some(pot_item.clone())
         } else {
             None
@@ -368,12 +354,4 @@ impl Buckets {
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
 
-    // #[test]
-    // fn () {
-    //
-    // }
-}

@@ -16,18 +16,6 @@ pub struct Move {
     // pub k: f64,
 }
 
-// impl Move {
-//     pub fn new(from: u32, to: u32, e_barr: f64, e_diff: f64, temperature: f64) -> Move {
-//         Move {
-//             from,
-//             to,
-//             e_diff,
-//             e_barr,
-//             k: tst_rate_calculation(e_diff, e_barr, temperature),
-//         }
-//     }
-// }
-
 pub fn tst_rate_calculation(e_diff: f64, e_barr: f64, temperature: f64) -> f64 {
     // let e_use = if e_diff.is_negative() { 0. } else { e_diff };
     // println!("barr {}", e_barr);
@@ -47,7 +35,7 @@ impl crate::Simulation {
         e_diff: f64,
         is_recording_sections: bool,
     ) {
-        let (from_change, to_change, inter) =
+        let (from_change, to_change, _) =
             no_int_nn_from_move(move_from, move_to, &self.gridstructure.nn_pair_no_intersec);
 
         self.atom_pos[move_to as usize].occ = self.atom_pos[move_from as usize].occ; // covers different alloys also
@@ -244,7 +232,7 @@ impl crate::Simulation {
     }
 
     pub fn update_add_remove(&mut self, move_from: u32, move_to: u32, how: &AtomChangeHow) {
-        let (from_change, to_change, inter) =
+        let (from_change, to_change, _) =
             no_int_nn_from_move(move_from, move_to, &self.gridstructure.nn_pair_no_intersec);
         // if add_remove::REMOVE_ATOM || add_remove::EXCHANGE_ATOM {
         let pos_change = match how {
@@ -314,7 +302,7 @@ impl crate::Simulation {
 
         let mut nn_atom_type_count_tst = [0; NUM_ATOM_TYPES];
         let mut cn_tst = 0;
-        let mut from_nn_atom_type_no_tst = self.atom_pos[move_from as usize].nn_atom_type_count;
+        let from_nn_atom_type_no_tst = self.atom_pos[move_from as usize].nn_atom_type_count;
         let mut to_nn_atom_type_count = self.atom_pos[move_to as usize].nn_atom_type_count;
         to_nn_atom_type_count[atom_typ as usize] -= 1;
 
@@ -382,7 +370,6 @@ impl crate::Simulation {
             0,
         );
 
-        // println!("prev_e: {}, future_e: {} tst_e {}", prev_e, future_e, tst_e);
         (prev_e - tst_e, future_e - tst_e)
     }
 }
@@ -410,33 +397,6 @@ fn no_int_nn_from_move(
         (no_int.0, no_int.1, no_int.2)
     } else {
         (no_int.1, no_int.0, no_int.2)
-    }
-}
-
-fn no_int_nnn_from_move(
-    move_from: u32,
-    move_to: u32,
-    nnn_pair_no_intersec: &std::collections::HashMap<
-        u64,
-        (
-            Vec<Vec<u32>>,
-            Vec<Vec<u32>>,
-            Vec<(u32, Vec<u32>, Vec<u32>, Vec<u32>)>,
-        ),
-        fnv::FnvBuildHasher,
-    >,
-) -> (
-    &Vec<Vec<u32>>,
-    &Vec<Vec<u32>>,
-    &Vec<(u32, Vec<u32>, Vec<u32>, Vec<u32>)>,
-    bool,
-) {
-    let (min, max, inter) = &nnn_pair_no_intersec[&(std::cmp::min(move_from, move_to) as u64
-        + ((std::cmp::max(move_to, move_from) as u64) << 32))];
-    if move_to > move_from {
-        (&min, &max, &inter, false)
-    } else {
-        (&max, &min, &inter, true)
     }
 }
 
@@ -471,43 +431,4 @@ fn no_int_nnn_from_move(
 // unsafe impl Send for WrapperListDict {}
 // unsafe impl Sync for WrapperListDict {}
 
-use std::convert::TryInto;
 
-const LANES: usize = 16;
-
-pub fn simd_sum(values: &[f64]) -> f64 {
-    let chunks = values.chunks_exact(LANES);
-    let remainder = chunks.remainder();
-
-    let sum = chunks.fold([0.0_f64; LANES], |mut acc, chunk| {
-        let chunk: [f64; LANES] = chunk.try_into().unwrap();
-        for i in 0..LANES {
-            acc[i] += chunk[i];
-        }
-        acc
-    });
-
-    let remainder: f64 = remainder.iter().copied().sum();
-    let reduced: f64 = sum.iter().copied().take(LANES).sum();
-    reduced + remainder
-}
-
-pub fn simd_sum_to(values: &[f64], cond: f64) -> f64 {
-    let chunks = values.chunks_exact(LANES);
-    let remainder = chunks.remainder();
-
-    let mut i = 0;
-    let mut sum = 0.;
-
-    let sum = chunks.fold([0.0_f64; LANES], |mut acc, chunk| {
-        let chunk: [f64; LANES] = chunk.try_into().unwrap();
-        for i in 0..LANES {
-            acc[i] += chunk[i];
-        }
-        acc
-    });
-
-    let remainder: f64 = remainder.iter().copied().sum();
-    let reduced: f64 = sum.iter().copied().take(LANES).sum();
-    reduced + remainder
-}

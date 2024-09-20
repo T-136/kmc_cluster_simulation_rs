@@ -1,4 +1,3 @@
-use core::panic;
 use fnv::FnvBuildHasher;
 use std::collections::{HashMap, HashSet};
 
@@ -8,7 +7,7 @@ fn create_support(
     support_indices: Vec<u32>,
     nn: &HashMap<u32, [u32; 12], FnvBuildHasher>,
     iclose: u32,
-) -> Vec<u8> {
+)  {
     let center_of_mass: &[f64; 3] = &xsites_positions[iclose as usize];
     let mut support = Vec::new();
     let refpos = xsites_positions[0];
@@ -39,10 +38,7 @@ fn create_support(
             support.push(i as u32)
         };
     }
-    let mut nn_support = vec![0_u8; xsites_positions.len()];
     nn_support_from_supprt(atom_pos, nn);
-    // panic!("fds");
-    nn_support
 }
 
 pub fn nn_support_from_supprt(

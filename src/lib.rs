@@ -1,18 +1,14 @@
-use anyhow;
-use atom_change::AtomChangeHow;
 use csv::Writer;
 use energy::EnergyInput;
-use rand;
 use rand::distributions::{Distribution, Uniform};
 use rand::prelude::*;
 use rand::rngs::SmallRng;
-use std::collections::hash_map::Entry;
-use std::collections::{BTreeMap, HashMap, HashSet};
+use std::collections::{HashMap, HashSet};
 use std::fs::File;
 use std::io::prelude::*;
 use std::io::BufReader;
 use std::sync::Arc;
-use std::{cmp, eprint, fs, println, usize};
+use std::{fs, println, usize};
 
 // mod add_remove_list;
 pub mod alpha_energy;
@@ -443,6 +439,8 @@ impl Simulation {
                 .expect("kmc pick move failed");
             match item.clone() {
                 ItemEnum::Move(mmove) => {
+                    // println!("move barr: {}", mmove.e_barr);
+                    // println!("total_k: {}", self.possible_moves.total_k);
                     self.increment_time(k_tot, &mut rng_choose);
 
                     self.perform_move(mmove.from, mmove.to, mmove.e_diff, is_recording_sections);
@@ -517,8 +515,6 @@ impl Simulation {
         let rand_value: f64 = between.sample(rng_e_number);
 
         self.sim_time -= rand_value.ln() / k_tot;
-        // rand_value.ln() / k_tot
-        // self.sim_time += 1. / k_tot
     }
 
     pub fn write_exp_file(&self, exp: &Results) {
@@ -969,7 +965,7 @@ mod tests {
     }
 }
 
-fn read_alphas(alphas_file: String, atom_names: &mut HashMap<String, u8>) -> [[[f64; 12]; 2]; 2] {
+pub fn read_alphas(alphas_file: String, atom_names: &mut HashMap<String, u8>) -> [[[f64; 12]; 2]; 2] {
     const LINE_COUNT: usize = 14;
 
     let path = std::path::Path::new(&alphas_file);
@@ -1012,9 +1008,4 @@ fn read_alphas(alphas_file: String, atom_names: &mut HashMap<String, u8>) -> [[[
         }
     }
     alphas
-}
-
-enum FromOrTo {
-    From,
-    To,
 }
