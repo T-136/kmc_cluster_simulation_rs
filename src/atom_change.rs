@@ -36,7 +36,7 @@ impl AtomPosChange {
         temperature: f64,
         how: AtomChangeHow,
     ) -> Option<AtomPosChange> {
-        // return None;
+        return None;
         match how {
             AtomChangeHow::Remove | AtomChangeHow::Exchange => {
                 if atom_type == REMOVE_ATOM_TYPE {

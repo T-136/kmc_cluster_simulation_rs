@@ -313,7 +313,7 @@ impl Buckets {
         coin_toss: &mut SmallRng,
         bucket: &Bucket,
     ) -> Option<ItemEnum> {
-        let pick = Uniform::new_inclusive(0, 1).sample(bucket_pick) * (bucket.items.len() - 1);
+        let pick = Uniform::new_inclusive(0, (bucket.items.len() - 1)).sample(bucket_pick);
         let pot_item = &bucket.items[pick];
         if Uniform::new_inclusive(0., 2_f64.powi(bucket.bucket_power)).sample(coin_toss)
             < pot_item.get_k()
@@ -332,8 +332,8 @@ impl Buckets {
         temp: f64,
     ) -> Option<(ItemEnum, f64)> {
         // self.calc_total_k_change(temp);
-        let between = Uniform::new_inclusive(0., 1.);
-        let mut k_time_rng = between.sample(rng_choose) * self.total_k;
+        let between = Uniform::new_inclusive(0., self.total_k);
+        let mut k_time_rng = between.sample(rng_choose);
         // println!(
         //     "ktot: {} krng: {}",
         //     format!("{:e}", self.total_k),
