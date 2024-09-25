@@ -1,5 +1,4 @@
 use csv::Writer;
-use energy::EnergyInput;
 use rand::distributions::{Distribution, Uniform};
 use rand::prelude::*;
 use rand::rngs::SmallRng;
@@ -14,7 +13,6 @@ use std::{fs, println, usize};
 pub mod alpha_energy;
 mod atom_change;
 mod buckets_linear;
-pub mod energy;
 mod grid_structure;
 // mod main;
 mod moves;
@@ -377,12 +375,10 @@ impl Simulation {
         println!("SAVE_TH: {}", save_every_nth);
         println!("niter: {}", self.niter);
 
-        // print!("poss moves: {:?}", self.possible_moves.moves);
-
         for iiter in 0..self.niter {
             if iiter % section_size == 0 {
                 println!(
-                    "iteration {}; {}%",
+                    "iteration {:e}; {}%",
                     iiter,
                     (iiter as f64 / self.niter as f64 * 100.)
                 );
@@ -394,16 +390,6 @@ impl Simulation {
                         .sum::<usize>(),
                     self.possible_moves.total_k
                 );
-                // println!("poss addremove: {:?}", self.add_or_remove.atoms);
-                // println!(
-                //     "buckets: {} {:?} ",
-                //     self.possible_moves.buckets_list.len(),
-                //     self.possible_moves
-                //         .buckets_list
-                //         .iter()
-                //         .map(|bucket| (bucket.bucket_power, bucket.own_k))
-                //         .collect::<Vec<(i32, f64)>>()
-                // );
             }
             let is_recording_sections = iiter * self.optimization_cut_off_fraction[1]
                 >= self.niter * self.optimization_cut_off_fraction[0];
@@ -769,21 +755,15 @@ mod tests {
             String,
             String,
             String,
-            // String,
-            String,
-            String,
             String,
             String,
         ) {
             (
                 format!("{}bulk.poscar", grid_folder),
                 format!("{}nearest_neighbor", grid_folder),
-                format!("{}next_nearest_neighbor", grid_folder),
                 format!("{}nn_pairlist", grid_folder),
-                // format!("{}nnn_pairlist", grid_folder),
                 format!("{}atom_sites", grid_folder),
                 format!("{}nn_pair_no_intersec", grid_folder),
-                format!("{}nnn_gcn_no_intersec.json", grid_folder),
                 format!("{}surrounding_moves.json", grid_folder),
             )
         }
@@ -791,11 +771,9 @@ mod tests {
         let (
             bulk_file_name,
             nn_file,
-            nnn_file,
             nn_pairlist_file,
             atom_sites,
             nn_pair_no_int_file,
-            nnn_pair_no_int_file,
             surrounding_moves_file,
         ) = file_paths("../303030-pair_kmc/".to_string());
 

@@ -89,6 +89,10 @@ impl Alphas {
             energy += 0.4 ;
         }
 
+        // if cn_metal == 3 || cn_metal == 4 {
+        //     return morse_potential(energy);
+        // }
+
         nn_atom_type_count
             .iter()
             .enumerate()
@@ -98,9 +102,6 @@ impl Alphas {
                     / cn_metal as f64
             });
 
-        // if cn_metal == 3 || cn_metal == 4 {
-        //     return morse_potential(energy);
-        // }
         energy
 
     }
@@ -191,15 +192,6 @@ fn morse_potential(e_well: f64) -> f64 {
     (-e_well * (1.-E.powf(-A * (-D_MIN * 0.15)).powi(2)) + e_well) 
 }
 
-fn lennard_potential() -> f64 {
-    // Pd	7.383e−20	2.515e−10	7.559e−20	
-    // Pt	1.098e−19	2.541e−10	1.136e−19
-    const D_E: f64 = 1.098e-19;
-    const D: f64 = 0.9;
-
-    4. * D_E * ((1. /D).powi(12)-(1./D).powi(6))
-}
-
 
 #[cfg(test)]
 mod tests {
@@ -262,7 +254,6 @@ mod tests {
         let mut atom_names: std::collections::HashMap<String, u8> = std::collections::HashMap::new();
         let alpha_file: String = "./Pt_Pd.6.bat".to_string();
         let alphas_inp = super::super::read_alphas(alpha_file, &mut atom_names);
-        // let alphas_inp = [alpha_pt, alpha_pd];
         let alphas = Alphas::new(alphas_inp);
 
         struct TestPositin  {

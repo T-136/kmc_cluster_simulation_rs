@@ -41,8 +41,6 @@ impl Bucket {
         if self.own_k * 0.2 <= new_k || self.own_k < 0.001 || self.edit_counter >= MAX_EDIT_COUNTER
         {
             self.edit_counter = 0;
-            
-            // self.own_k = moves::simd_sum(&self.k_s);
             self.own_k = self.k_s.iter().sum::<f64>();
         }
     }
@@ -58,9 +56,9 @@ pub struct ItemIndexes {
 pub struct Buckets {
     pub edit_counter: i32,
     pub bucket_power_to_pos: HashMap<i32, usize, ahash::RandomState>,
-    // key from + (to << 32)
+    // key = from + (to << 32)
     pub move_to_position: HashMap<u64, ItemIndexes, ahash::RandomState>,
-    // key pos + (enum discrimenent << 32)
+    // key = pos + (enum discrimenent << 32)
     pub add_remove_to_position: HashMap<u64, ItemIndexes, ahash::RandomState>,
     pub total_k: f64,
     pub buckets_list: Vec<Bucket>,
@@ -268,35 +266,17 @@ impl Buckets {
     }
 
     pub fn update_k_if_item_exists(&mut self, item: ItemEnum, k: f64) {
-        // let item_id = item.get_id();
         match item {
             ItemEnum::Move(mmove) => {
+                //todo: unnecessary remove and insert could change k in place
                 if self.remove_move(mmove.from, mmove.to) {
                     self.cond_add_item(ItemEnum::Move(mmove), k);
                 }
-                // if let Some(item_indexes) = self.move_to_position.get(&item_id) {
-                //     let bucket = &mut self.buckets_list[item_indexes.power_of_k as usize];
-                //
-                //     self.total_k -= bucket.items[item_indexes.vec_index].get_k();
-                //     bucket.items[item_indexes.vec_index] = ItemEnum::Move(mmove);
-                //     self.total_k += bucket.items[item_indexes.vec_index].get_k();
-                // }
             }
             ItemEnum::AddOrRemove(add_or_remove) => {
                 if self.remove_add_remove(add_or_remove.pos) {
                     self.cond_add_item(ItemEnum::AddOrRemove(add_or_remove), k);
                 }
-                // if let Some(item_indexes) = self.add_remove_to_position.get(&item_id) {
-                //     // let old_energy = std::mem::replace(&mut self.moves[*position].energy, new_energy);
-                //
-                //     let bucket = &mut self.buckets_list[item_indexes.power_of_k as usize];
-                //
-                //     // self.total_k += item.get_k();
-                //
-                //     self.total_k -= bucket.items[item_indexes.vec_index].get_k();
-                //     bucket.items[item_indexes.vec_index] = ItemEnum::AddOrRemove(add_or_remove);
-                //     self.total_k += bucket.items[item_indexes.vec_index].get_k();
-                // }
             }
         }
     }
@@ -312,7 +292,6 @@ impl Buckets {
         if Uniform::new_inclusive(0., 2_f64.powi(bucket.bucket_power)).sample(coin_toss)
             < bucket.k_s[pick]
         {
-            // println!("k: {}", bucket.k_s[pick]);
             Some(pot_item.clone())
         } else {
             None
@@ -326,14 +305,8 @@ impl Buckets {
         coin_toss: &mut SmallRng,
         temp: f64,
     ) -> Option<(ItemEnum, f64)> {
-        // self.calc_total_k_change(temp);
         let between = Uniform::new_inclusive(0., self.total_k);
         let mut k_time_rng = between.sample(rng_choose);
-        // println!(
-        //     "ktot: {} krng: {}",
-        //     format!("{:e}", self.total_k),
-        //     format!("{:e}", k_time_rng),
-        // );
         let mut cur_k = 0_f64;
 
         for (iter, bucket) in self.buckets_list.iter().enumerate() {

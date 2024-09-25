@@ -7,7 +7,6 @@ pub const NN_PAIR_ONLY_INTERSEC_NUMBER: usize = 4;
 
 pub struct GridStructure {
     pub nn: HashMap<u32, [u32; super::CN], fnv::FnvBuildHasher>,
-    // pub nnn: HashMap<u32, [u32; super::GCN], fnv::FnvBuildHasher>,
     pub nn_pair_no_intersec: HashMap<
         u64,
         (

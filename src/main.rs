@@ -12,7 +12,6 @@ use std::io::BufReader;
 use std::path::Path;
 use std::sync::Arc;
 use std::thread;
-use std::usize;
 
 fn prepend<T>(v: Vec<T>, s: &[T]) -> Vec<T>
 where
@@ -128,21 +127,15 @@ fn file_paths(
     String,
     String,
     String,
-    // String,
-    String,
-    String,
     String,
     String,
 ) {
     (
         format!("{}bulk.poscar", grid_folder),
         format!("{}nearest_neighbor", grid_folder),
-        format!("{}next_nearest_neighbor", grid_folder),
         format!("{}nn_pairlist", grid_folder),
-        // format!("{}nnn_pairlist", grid_folder),
         format!("{}atom_sites", grid_folder),
         format!("{}nn_pair_no_intersec", grid_folder),
-        format!("{}nnn_gcn_no_intersec.json", grid_folder),
         format!("{}surrounding_moves.json", grid_folder),
     )
 }
@@ -184,12 +177,9 @@ fn main() {
     let (
         bulk_file_name,
         nn_file,
-        nnn_file,
         nn_pairlist_file,
-        // nnn_pairlist_file,
         atom_sites,
         nn_pair_no_int_file,
-        nnn_pair_no_int_file,
         surrounding_moves_file,
     ) = file_paths(args.grid_folder);
 
@@ -197,7 +187,6 @@ fn main() {
     let niter_str = args.iterations;
     let niter = fmt_scient(&niter_str);
     let mut write_snap_shots: bool = args.write_snap_shots;
-    // let bulk_file_name: String = args.core_file;
     let optimization_cut_off_fraction: Vec<u64> = args.optimization_cut_off_fraction;
     let repetition = args.repetition;
 
@@ -214,21 +203,16 @@ fn main() {
 
     let gridstructure = GridStructure::new(
         nn_file,
-        // nnn_file,
         nn_pair_no_int_file,
-        // nnn_pair_no_int_file,
         atom_sites,
         bulk_file_name,
         surrounding_moves_file,
     );
     let gridstructure = Arc::new(gridstructure);
-    // atom_names.insert("Pt".to_string(), 1);
-    // atom_names.insert("Pd".to_string(), 2);
     atom_names.insert("Al".to_string(), 100);
 
     let alphas_file = args.alphas;
     let alphas_arr = read_alphas(alphas_file, &mut atom_names);
-    println!("{:?}", alphas_arr);
     let alphas = alpha_energy::Alphas::new(alphas_arr);
     println!(
         "alphas: {:?} \n sum alphas: {:?}",
