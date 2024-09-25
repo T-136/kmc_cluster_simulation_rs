@@ -36,6 +36,7 @@ impl AtomPosChange {
         temperature: f64,
         how: AtomChangeHow,
     ) -> Option<AtomPosChange> {
+        //todo energy for adding/removing atoms (reduction/oxidization)
         return None;
         // match how {
         //     AtomChangeHow::Remove | AtomChangeHow::Exchange => {

@@ -280,6 +280,7 @@ fn main() {
     // });
 }
 
+///returns alphas where alhpas[x][x] is pure atom_x and alhpas[x][y] is atom_x in atom_y
 fn read_alphas(alphas_file: String, atom_names: &mut HashMap<String, u8>) -> [[[f64; 12]; 2]; 2] {
     const LINE_COUNT: usize = 14;
 

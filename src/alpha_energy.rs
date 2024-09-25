@@ -1,6 +1,7 @@
+///```let binding_energy = alphas.cn[atom_type_index][in_atom_type_index][cn-1]```
+///summed_to_x contains the alphas pre-summed to each coordination number
 #[derive(Clone, Debug)]
 pub struct Alphas {
-    ///atom_type_index;in_atom_type_index;cn-1
     pub cn: [[[f64; 12]; super::NUM_ATOM_TYPES]; super::NUM_ATOM_TYPES],
     pub summed_to_x: [[[f64; 12]; super::NUM_ATOM_TYPES]; super::NUM_ATOM_TYPES],
 }
@@ -75,11 +76,18 @@ impl Alphas {
         at_supp: u8,
         supp_ee: i64,
     ) -> f64 {
+
         if cn_metal == 0 {
             return 0.;
         }
 
         let mut energy = 0.;
+
+        if cn_metal == 3 {
+            energy += 0.3 ;
+        } else if cn_metal == 4 {
+            energy += 0.4 ;
+        }
 
         nn_atom_type_count
             .iter()
@@ -89,7 +97,12 @@ impl Alphas {
                     * *nn_atom_type_count_num as f64
                     / cn_metal as f64
             });
+
+        // if cn_metal == 3 || cn_metal == 4 {
+        //     return morse_potential(energy);
+        // }
         energy
+
     }
 
     pub fn e_one_atom<I>(
@@ -158,6 +171,35 @@ pub fn e_barrier(prev_e: f64, future_e: f64) -> f64 {
     (prev_e - e_barr_correction).abs()
     // (prev_e - future_e).abs()
 }
+
+fn morse_potential(e_well: f64) -> f64 {
+    // https://www.sciencedirect.com/science/article/pii/S0927025622000180
+    //          E       A           r_min
+    // pd: 7.559e−20	1.576e＋10	2.907e−10
+    // pt: 	1.136e−19	1.581e＋10	2.929e−10
+    
+    // const D_NORMAL: f64 = 1./(2_f64.powf(0.5_f64));
+    const D_CUBE_LEN: f64 = std::f64::consts::SQRT_2;
+     
+    const A: f64 = 1.576e+10;
+    const A_EV: f64 = 1.576e+10 / D_MIN;
+    const D_MIN: f64 = 2.907e-10;
+    const D_E: f64 = 7.559e-20;
+    const E: f64 = std::f64::consts::E;
+
+
+    (-e_well * (1.-E.powf(-A * (-D_MIN * 0.15)).powi(2)) + e_well) 
+}
+
+fn lennard_potential() -> f64 {
+    // Pd	7.383e−20	2.515e−10	7.559e−20	
+    // Pt	1.098e−19	2.541e−10	1.136e−19
+    const D_E: f64 = 1.098e-19;
+    const D: f64 = 0.9;
+
+    4. * D_E * ((1. /D).powi(12)-(1./D).powi(6))
+}
+
 
 #[cfg(test)]
 mod tests {
@@ -255,6 +297,9 @@ mod tests {
 
         }
 
+
+        println!("distance {}", std::f64::consts::SQRT_2 / 2.  );
+        println!("morse pot {}", super::morse_potential(barr) );
         println!("move in bulk of {}: {}", atom_0, barr);
 
     }
