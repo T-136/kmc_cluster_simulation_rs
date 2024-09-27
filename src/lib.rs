@@ -5,9 +5,9 @@ use rand::rngs::SmallRng;
 use std::collections::{HashMap, HashSet};
 use std::fs::File;
 use std::io::prelude::*;
-use std::io::BufReader;
 use std::sync::Arc;
 use std::{fs, println, usize};
+use std::io::BufReader;
 
 // mod add_remove_list;
 pub mod alpha_energy;
@@ -677,69 +677,6 @@ impl Simulation {
     }
 }
 
-pub fn find_simulation_with_lowest_energy(folder: String) -> anyhow::Result<()> {
-    // let mut folder_with_lowest_e: PathBuf = PathBuf::new();
-    let mut lowest_e: f64 = f64::INFINITY;
-
-    for _ in 0..2 {
-        let paths = fs::read_dir(&folder).unwrap();
-        for path in paths {
-            let ok_path = match path {
-                Ok(ok_path) => ok_path,
-                Err(e) => {
-                    eprintln!("{:?}", e);
-                    continue;
-                }
-            };
-
-            if !ok_path.path().is_dir() {
-                continue;
-            }
-            let folder = fs::read_dir(ok_path.path().as_path())?;
-            for folder_entry in folder {
-                let file = match folder_entry {
-                    Ok(path2) => {
-                        if !path2.path().is_dir() {
-                            path2
-                        } else {
-                            println!("unexpected folder");
-                            continue;
-                        }
-                    }
-                    Err(e) => {
-                        eprintln!("{:?}", e);
-                        continue;
-                    }
-                };
-                if !file.path().to_str().unwrap().ends_with(".json") {
-                    continue;
-                }
-
-                let file = fs::File::open(file.path()).unwrap();
-                let reader = BufReader::new(file);
-                let res: Result<Results, serde_json::Error> = serde_json::from_reader(reader);
-                match res {
-                    Ok(res) => {
-                        if res.lowest_energy_struct.energy <= lowest_e {
-                            // folder_with_lowest_e = path2.path();
-                            lowest_e = res.lowest_energy_struct.energy;
-                        } else {
-                            println!("{:?}", res.lowest_energy_struct.energy);
-                            println!("{:?}", ok_path.path())
-                            // fs::remove_dir_all(ok_path.path())?;
-                        }
-                    }
-                    Err(e) => {
-                        eprintln!("{:?}", format!("{:?} in folder {:?}", e, ok_path.path()));
-                        // fs::remove_dir_all(ok_path.path())?;
-                    }
-                }
-            }
-        }
-    }
-
-    Ok(())
-}
 
 #[cfg(test)]
 mod tests {
@@ -791,7 +728,7 @@ mod tests {
         // atom_names.insert("Pd".to_string(), 1);
         atom_names.insert("Al".to_string(), 100);
 
-        let alphas_arr = read_alphas("./Pt_Pd.6.bat".to_string(), &mut atom_names);
+        let alphas_arr = alpha_energy::read_alphas("./Pt_Pd.6.bat".to_string(), &mut atom_names);
         let alphas = alpha_energy::Alphas::new(alphas_arr);
 
         let mut sim = Simulation::new(
@@ -943,47 +880,3 @@ mod tests {
     }
 }
 
-pub fn read_alphas(alphas_file: String, atom_names: &mut HashMap<String, u8>) -> [[[f64; 12]; 2]; 2] {
-    const LINE_COUNT: usize = 14;
-
-    let path = std::path::Path::new(&alphas_file);
-    let file_name = path.file_name().unwrap();
-    // let mut x = alphas_file.split('.');
-    let atom_names_string = file_name.to_str().unwrap().split('.').next().unwrap();
-    for (i, metal) in atom_names_string.split('_').enumerate() {
-        atom_names.insert(metal.to_string(), i as u8);
-    }
-    let pairlist = fs::File::open(alphas_file).expect("Should have been able to read the file");
-
-    let lines = BufReader::new(pairlist);
-    let mut alphas: [[[f64; 12]; 2]; 2] = [[[0.; 12]; 2]; 2];
-
-    for (i, line) in lines.lines().enumerate() {
-        println!("{}", i);
-        let r = line.unwrap();
-        let num = r.parse::<f64>().unwrap();
-        println!("{}", num);
-        if i < LINE_COUNT {
-            if i >= 12 {
-                continue;
-            }
-            alphas[0][0][i] = num;
-        } else if i < LINE_COUNT * 2 {
-            if i >= LINE_COUNT * 2 - 2 {
-                continue;
-            }
-            alphas[1][1][i - LINE_COUNT * 1] = num;
-        } else if i < LINE_COUNT * 3 {
-            if i >= LINE_COUNT * 3 - 2 {
-                continue;
-            }
-            alphas[1][0][i - LINE_COUNT * 2] = num;
-        } else {
-            if i >= LINE_COUNT * 4 - 2 {
-                continue;
-            }
-            alphas[0][1][i - LINE_COUNT * 3] = num;
-        }
-    }
-    alphas
-}

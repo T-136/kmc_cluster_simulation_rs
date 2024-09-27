@@ -212,8 +212,7 @@ fn main() {
     atom_names.insert("Al".to_string(), 100);
 
     let alphas_file = args.alphas;
-    let alphas_arr = read_alphas(alphas_file, &mut atom_names);
-    let alphas = alpha_energy::Alphas::new(alphas_arr);
+    let alphas = alpha_energy::Alphas::new_from_json(alphas_file, &mut atom_names);
     println!(
         "alphas: {:?} \n sum alphas: {:?}",
         alphas.cn, alphas.summed_to_x
@@ -256,60 +255,7 @@ fn main() {
     for handle in handle_vec {
         handle.join().unwrap();
     }
-    // mc::find_simulation_with_lowest_energy(save_folder).unwrap_or_else(|err| {
-    //     println!(
-    //         "{:?}",
-    //         format!("deleting folders with heigh energy not successful {err}")
-    //     )
-    // });
 }
-
-///returns alphas where alhpas[x][x] is pure atom_x and alhpas[x][y] is atom_x in atom_y
-fn read_alphas(alphas_file: String, atom_names: &mut HashMap<String, u8>) -> [[[f64; 12]; 2]; 2] {
-    const LINE_COUNT: usize = 14;
-
-    let path = Path::new(&alphas_file);
-    let file_name = path.file_name().unwrap();
-    // let mut x = alphas_file.split('.');
-    let atom_names_string = file_name.to_str().unwrap().split('.').next().unwrap();
-    for (i, metal) in atom_names_string.split('_').enumerate() {
-        atom_names.insert(metal.to_string(), i as u8);
-    }
-    let pairlist = fs::File::open(alphas_file).expect("Should have been able to read the file");
-
-    let lines = BufReader::new(pairlist);
-    let mut alphas: [[[f64; 12]; 2]; 2] = [[[0.; 12]; 2]; 2];
-
-    for (i, line) in lines.lines().enumerate() {
-        println!("{}", i);
-        let r = line.unwrap();
-        let num = r.parse::<f64>().unwrap();
-        println!("{}", num);
-        if i < LINE_COUNT {
-            if i >= 12 {
-                continue;
-            }
-            alphas[0][0][i] = num;
-        } else if i < LINE_COUNT * 2 {
-            if i >= LINE_COUNT * 2 - 2 {
-                continue;
-            }
-            alphas[1][1][i - LINE_COUNT * 1] = num;
-        } else if i < LINE_COUNT * 3 {
-            if i >= LINE_COUNT * 3 - 2 {
-                continue;
-            }
-            alphas[1][0][i - LINE_COUNT * 2] = num;
-        } else {
-            if i >= LINE_COUNT * 4 - 2 {
-                continue;
-            }
-            alphas[0][1][i - LINE_COUNT * 3] = num;
-        }
-    }
-    alphas
-}
-
 
 #[cfg(test)]
 mod tests {
@@ -320,7 +266,7 @@ mod tests {
         let alphas_inp = "Pt_Pd.3.bat".to_string();
 
         let mut atom_names: HashMap<String, u8> = HashMap::new();
-        let res = read_alphas(alphas_inp, &mut atom_names);
+        let res = alpha_energy::read_alphas(alphas_inp, &mut atom_names);
         println!("{:?}", atom_names);
 
         println!("{:?}", res);

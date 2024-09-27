@@ -1,9 +1,41 @@
+use serde_json;
+use core::panic;
+use std::fs;
+use std::collections::HashMap;
+use std::fmt;
+use std::io::BufReader;
+use std::io::BufRead;
+
+use crate::CN;
+
 ///```let binding_energy = alphas.cn[atom_type_index][in_atom_type_index][cn-1]```
 ///summed_to_x contains the alphas pre-summed to each coordination number
 #[derive(Clone, Debug)]
 pub struct Alphas {
     pub cn: [[[f64; 12]; super::NUM_ATOM_TYPES]; super::NUM_ATOM_TYPES],
     pub summed_to_x: [[[f64; 12]; super::NUM_ATOM_TYPES]; super::NUM_ATOM_TYPES],
+}
+
+#[derive(Debug, Clone)]
+struct AlphaJsonError;
+
+impl std::error::Error for AlphaJsonError {}
+
+impl fmt::Display for AlphaJsonError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "Bad alphas JSON file")
+    }
+}
+
+#[derive(Debug, Clone)]
+struct AlphaEnergyValueError;
+
+impl std::error::Error for AlphaEnergyValueError {}
+
+impl fmt::Display for AlphaEnergyValueError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "Energy value is not a float")
+    }
 }
 
 impl Alphas {
@@ -18,6 +50,63 @@ impl Alphas {
             cn: alphas_input,
             summed_to_x: alphas_summed_to_x,
         }
+    }
+
+    pub fn new_from_json(file: String, atom_names: &mut HashMap<String, u8>  ) -> Alphas {
+
+
+        let mut alphas_input: [[[f64; 12]; super::NUM_ATOM_TYPES]; super::NUM_ATOM_TYPES] = [[[0_f64; 12]; super::NUM_ATOM_TYPES]; super::NUM_ATOM_TYPES];
+        let file = fs::File::open(file)
+            .expect("file should open read only");
+        let json: serde_json::Value = serde_json::from_reader(file)
+            .expect("file should be proper JSON");
+
+        let mut unique_atom_index = 0;
+        for key_value in json.as_object().expect("root should be object").iter() {
+            let diluted_in_atom_index: usize; 
+            let atom_index: usize;
+            let key_collection: Vec<&str> = key_value.0.split('_').collect::<Vec<&str>>();
+            if key_collection[0] == "dilute" {
+                assert_eq!(key_collection.len(), 4, "wrong key in alphas json file"); 
+
+                atom_index = *atom_names.get(key_collection[1]).expect("diluted energy key needs format 'diluted_Metall_on_Metall' ") as usize; 
+                diluted_in_atom_index =  *atom_names.get(key_collection[3]).ok_or(AlphaJsonError).expect("diluted energy key needs format 'diluted_Metall_on_Metall' ") as usize;
+            } else if key_collection[0] == "clean" {
+                atom_index = unique_atom_index;
+                diluted_in_atom_index = unique_atom_index;
+                atom_names.insert(key_collection[1].to_string(), atom_index as u8);
+            } else {
+                panic!("bad key in alphas JSON file");
+            }
+
+            assert!(key_value.1.as_object().ok_or(AlphaJsonError).expect("bad nested object").len()>= CN, "one of the energy lists has a wrong format");
+            let mut average_cn_12: f64 = 0.;
+            for (cn, energy) in key_value.1.as_object().ok_or(AlphaJsonError).expect("bad nested object").iter(){
+
+
+                let cn_key_collection: Vec<&str> = cn.split('-').collect::<Vec<&str>>();
+                if cn_key_collection.len() == 1 {
+                    let cn_value = cn.parse::<usize>().expect("bad JSON");
+                    alphas_input[atom_index][diluted_in_atom_index][cn_value-1] = energy.as_f64().ok_or(AlphaEnergyValueError).expect("energy value is not a flaot");
+                } else {
+                    if cn_key_collection[0] != "12" {
+                        panic!("no 12");
+                    }
+                    average_cn_12 += energy.as_f64().ok_or(AlphaEnergyValueError).expect("energy value is not a flaot");
+                }
+
+            }
+            alphas_input[atom_index][diluted_in_atom_index][11] = average_cn_12/3.;
+
+            if key_collection[0] == "clean" {
+                unique_atom_index += 1;
+            }
+
+        }
+
+
+
+        Alphas::new(alphas_input)
     }
 
     fn sum_up_to_cn(clean_and_dilluted: &[f64; 12], cn: usize) -> f64 {
@@ -192,6 +281,50 @@ fn morse_potential(e_well: f64) -> f64 {
     (-e_well * (1.-E.powf(-A * (-D_MIN * 0.15)).powi(2)) + e_well) 
 }
 
+///returns alphas where alhpas[x][x] is pure atom_x and alhpas[x][y] is atom_x in atom_y
+pub fn read_alphas(alphas_file: String, atom_names: &mut HashMap<String, u8>) -> [[[f64; 12]; 2]; 2] {
+    const LINE_COUNT: usize = 14;
+
+    let path = std::path::Path::new(&alphas_file);
+    let file_name = path.file_name().unwrap();
+    // let mut x = alphas_file.split('.');
+    let atom_names_string = file_name.to_str().unwrap().split('.').next().unwrap();
+    for (i, metal) in atom_names_string.split('_').enumerate() {
+        atom_names.insert(metal.to_string(), i as u8);
+    }
+    let pairlist = fs::File::open(alphas_file).expect("Should have been able to read the file");
+
+    let lines = BufReader::new(pairlist);
+    let mut alphas: [[[f64; 12]; 2]; 2] = [[[0.; 12]; 2]; 2];
+
+    for (i, line) in lines.lines().enumerate() {
+        let r = line.unwrap();
+        let num = r.parse::<f64>().unwrap();
+        if i < LINE_COUNT {
+            if i >= 12 {
+                continue;
+            }
+            alphas[0][0][i] = num;
+        } else if i < LINE_COUNT * 2 {
+            if i >= LINE_COUNT * 2 - 2 {
+                continue;
+            }
+            alphas[1][1][i - LINE_COUNT * 1] = num;
+        } else if i < LINE_COUNT * 3 {
+            if i >= LINE_COUNT * 3 - 2 {
+                continue;
+            }
+            alphas[1][0][i - LINE_COUNT * 2] = num;
+        } else {
+            if i >= LINE_COUNT * 4 - 2 {
+                continue;
+            }
+            alphas[0][1][i - LINE_COUNT * 3] = num;
+        }
+    }
+    alphas
+}
+
 
 #[cfg(test)]
 mod tests {
@@ -228,7 +361,7 @@ mod tests {
 
         let mut atom_names: std::collections::HashMap<String, u8> = std::collections::HashMap::new();
         let alpha_file: String = "./Pt_Pd.6.bat".to_string();
-        let alphas_inp = super::super::read_alphas(alpha_file, &mut atom_names);
+        let alphas_inp = super::read_alphas(alpha_file, &mut atom_names);
         // let alphas_inp = [alpha_pt, alpha_pd];
         let alphas = Alphas::new(alphas_inp);
 
@@ -253,7 +386,7 @@ mod tests {
     fn test_show_alphas() {
         let mut atom_names: std::collections::HashMap<String, u8> = std::collections::HashMap::new();
         let alpha_file: String = "./Pt_Pd.6.bat".to_string();
-        let alphas_inp = super::super::read_alphas(alpha_file, &mut atom_names);
+        let alphas_inp = super::read_alphas(alpha_file, &mut atom_names);
         let alphas = Alphas::new(alphas_inp);
 
         struct TestPositin  {
@@ -294,4 +427,36 @@ mod tests {
         println!("move in bulk of {}: {}", atom_0, barr);
 
     }
+
+    #[test]
+    fn test_alphas_from_json(){
+        let file_path = "./alpha_alt.json".to_string();
+        let mut atom_names: std::collections::HashMap<String, u8> = std::collections::HashMap::new();
+        let mut old_atom_names: std::collections::HashMap<String, u8> = std::collections::HashMap::new();
+
+
+        let alphas = Alphas::new_from_json(file_path, &mut atom_names);
+
+        let old_alpha_file: String = "./alphas/Pt_Pd.6.bat".to_string();
+        let alphas_inp = super::read_alphas(old_alpha_file, &mut old_atom_names);
+        let old_alphas = Alphas::new(alphas_inp);
+
+
+        println!("old atom_names: {:?}", old_atom_names);
+        println!("new atom_names: {:?}", atom_names);
+
+        for atom_name in  atom_names.keys() {
+            for in_atom_name in  atom_names.keys() {
+                    for cn_i in 0..CN {
+                        println!("{}", alphas.cn[*atom_names.get(atom_name).unwrap() as usize][*atom_names.get(in_atom_name).unwrap() as usize][cn_i]);
+                        // assert_eq!(alphas.cn[*atom_names.get(atom_name).unwrap() as usize][*atom_names.get(in_atom_name).unwrap() as usize][cn_i]
+                        //     , old_alphas.cn[*old_atom_names.get(atom_name).unwrap() as usize][*old_atom_names.get(in_atom_name).unwrap() as usize][cn_i]);
+                    }
+            }
+        }
+
+
+    }
+
+    
 }
