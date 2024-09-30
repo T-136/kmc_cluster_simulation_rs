@@ -7,7 +7,6 @@ use std::fs::File;
 use std::io::prelude::*;
 use std::sync::Arc;
 use std::{fs, println, usize};
-use std::io::BufReader;
 
 // mod add_remove_list;
 pub mod alpha_energy;
@@ -468,10 +467,26 @@ impl Simulation {
         if self.snap_shot_sections.is_some() {
             let mut wtr =
                 Writer::from_path(self.save_folder.clone() + "/snap_shot_sections.csv").unwrap();
+
+            let mut file = fs::OpenOptions::new()
+                .create(true) // To create a new file
+                .truncate(false)
+                .write(true)
+                // either use the ? operator or unwrap since it returns a Result
+                .open(self.save_folder.clone() + "/snap_shot_sections.csv").unwrap();
+
+
+            for (atom_name, atom_index) in self.atom_names.iter(){
+            file.write_all(atom_name.as_bytes()).unwrap();
+            file.write_all(":".as_bytes()).unwrap();
+            file.write_all(&[*atom_index]).unwrap();
+            file.write_all(",".as_bytes()).unwrap();
+            }
+            file.write_all(&[254]).unwrap();
             if let Some(snap_shot_sections) = &self.snap_shot_sections {
-                for heat_section in snap_shot_sections {
-                    wtr.write_record(heat_section.iter().map(|x| x.to_string()))
-                        .unwrap();
+                for snapshot in snap_shot_sections {
+                    file.write_all(snapshot).unwrap();
+                    // file.write_all(b"\n").unwrap();
                 }
             }
             wtr.flush().unwrap();
@@ -726,7 +741,7 @@ mod tests {
         let mut atom_names: HashMap<String, u8> = HashMap::new();
         // atom_names.insert("Pt".to_string(), 0);
         // atom_names.insert("Pd".to_string(), 1);
-        atom_names.insert("Al".to_string(), 100);
+        // atom_names.insert("Al".to_string(), 100);
 
         let alphas_arr = alpha_energy::read_alphas("./Pt_Pd.6.bat".to_string(), &mut atom_names);
         let alphas = alpha_energy::Alphas::new(alphas_arr);

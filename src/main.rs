@@ -209,7 +209,6 @@ fn main() {
         surrounding_moves_file,
     );
     let gridstructure = Arc::new(gridstructure);
-    atom_names.insert("Al".to_string(), 100);
 
     let alphas_file = args.alphas;
     let alphas = alpha_energy::Alphas::new_from_json(alphas_file, &mut atom_names);

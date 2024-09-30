@@ -22,9 +22,9 @@ pub fn write_occ_as_xyz(
     // trajectory: &mut Trajectory,
     save_folder: String,
     onlyocc: HashSet<u32, fnv::FnvBuildHasher>,
-    xsites_positions: &Vec<[f64; 3]>,
+    xsites_positions: &[[f64; 3]],
     unit_cell: &[f64; 3],
-    atom_pos: &Vec<super::AtomPosition>,
+    atom_pos: &[super::AtomPosition],
     atom_names: &HashMap<String, u8>,
 ) {
     let mut trajectory = Trajectory::open(save_folder.clone() + "/lowest_energy.xyz", 'w').unwrap();
