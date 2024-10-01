@@ -106,9 +106,20 @@ struct Args {
     /// folder which contains the files for the grid previously build using the python scipt.
     grid_folder: String,
 
-    #[arg(short, long, default_value_t = false)]
-    /// writes a file with the cluster every x iterations.
-    write_snap_shots: bool,
+    #[arg(long)]
+    /// Set how many snapshots are saved in each simulation. 
+    /// Snapshots are spread out equally throughout the simulation.
+    /// Saving the snapshots as binary file requires the used grid to visualize them but is more space
+    /// as long as the cluster has not less then 25 atoms then there are atoms in the grid.
+    write_binary_snapshots: Option<u32>,
+
+    #[arg(short, long, default_value = "200")]
+    /// Set how many snapshots are saved in each simulation. 
+    /// Snapshots are spread out equally throughout the simulation.
+    /// Saving the snapshots as xyz file can lead to large files. When the number of atoms is less
+    /// then 25 times the number of grid positions writing to the binary format will save disk
+    /// space.
+    write_xyz_snapshots: Option<u32>,
 
     #[arg(long)]
     /// adds one layer of atoms arround the cluster. Input muust be the atom e.g. "Pt".
@@ -186,7 +197,8 @@ fn main() {
     let coating: Option<String> = args.coating;
     let niter_str = args.iterations;
     let niter = fmt_scient(&niter_str);
-    let mut write_snap_shots: bool = args.write_snap_shots;
+    let write_xyz_snapshots: Option<u32> = args.write_xyz_snapshots;
+    let write_binary_snapshots: Option<u32> = args.write_binary_snapshots;
     let optimization_cut_off_fraction: Vec<u64> = args.optimization_cut_off_fraction;
     let repetition = args.repetition;
 
@@ -237,7 +249,8 @@ fn main() {
                 atoms_input,
                 temperature,
                 save_folder,
-                write_snap_shots,
+                write_xyz_snapshots,
+write_binary_snapshots,
                 rep,
                 optimization_cut_off_fraction,
                 alphas_arc,

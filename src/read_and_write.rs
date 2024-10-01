@@ -19,40 +19,38 @@ fn find_key_for_value<'a>(map: &'a HashMap<String, u8>, value: u8) -> Option<&'a
 }
 
 pub fn write_occ_as_xyz(
-    // trajectory: &mut Trajectory,
+    save_file: &str,
     save_folder: String,
-    onlyocc: HashSet<u32, fnv::FnvBuildHasher>,
+    snapshot_sections: &[Vec<u8>],
     xsites_positions: &[[f64; 3]],
     unit_cell: &[f64; 3],
-    atom_pos: &[super::AtomPosition],
     atom_names: &HashMap<String, u8>,
 ) {
-    let mut trajectory = Trajectory::open(save_folder.clone() + "/lowest_energy.xyz", 'w').unwrap();
-    let mut xyz: Vec<[f64; 3]> = Vec::new();
-    for (j, ii) in onlyocc.iter().enumerate() {
-        xyz.insert(j, xsites_positions[*ii as usize]);
-    }
-    let mut frame = Frame::new();
-    frame.set_cell(&UnitCell::new(unit_cell.clone()));
+    let  _ = Trajectory::open(save_folder.clone()+ "/" + save_file, 'w').unwrap();
+    let mut trajectory = Trajectory::open(save_folder.clone()+ "/" + save_file, 'a').unwrap();
 
-    for (i, atom) in atom_pos.iter().enumerate() {
-        if atom.occ == 255 {
-            continue;
-        }
-        frame.add_atom(
-            &Atom::new(
-                find_key_for_value(atom_names, atom.occ).expect(
-                    format!("unknown atom number {:?}, {:?}", atom_names, atom.occ).as_str(),
+    for snapshot in snapshot_sections.iter() {
+        let mut frame = Frame::new();
+        frame.set_cell(&UnitCell::new(unit_cell.clone()));
+        for (i, atom) in snapshot.iter().enumerate() {
+            if *atom == 255 {
+                continue;
+            }
+            frame.add_atom(
+                &Atom::new(
+                    find_key_for_value(atom_names, *atom).expect(
+                        format!("unknown atom number {:?}, {:?}", atom_names, atom).as_str(),
+                    ),
                 ),
-            ),
-            xsites_positions[i],
-            None,
-        );
+                xsites_positions[i],
+                None,
+            );
+        }
+        trajectory
+            .write(&frame)
+            .unwrap_or_else(|x| eprintln!("{}", x));
     }
 
-    trajectory
-        .write(&frame)
-        .unwrap_or_else(|x| eprintln!("{}", x));
 }
 
 pub fn read_sample(input_file: &str) -> Vec<(String, [f64; 3])> {
