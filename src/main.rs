@@ -111,7 +111,7 @@ struct Args {
     /// as long as the cluster has not less then 25 atoms then there are atoms in the grid.
     write_binary_snapshots: Option<u32>,
 
-    #[arg(short, long, default_value = "200")]
+    #[arg(short, long)]
     /// Set how many snapshots are saved in each simulation. 
     /// Snapshots are spread out equally throughout the simulation.
     /// Saving the snapshots as xyz file can lead to large files. When the number of atoms is less

@@ -101,8 +101,9 @@ pub struct Simulation {
     cn_dict_sections: Vec<HashMap<u8, f64>>,
     energy_sections_list: Vec<f64>,
     surface_composition: Vec<f64>,
-    write_xyz_snapshots_number: Option<u32>,
-    write_binary_snapshots_number: Option<u32>,
+    write_xyz_snapshots: bool,
+    write_binary_snapshots: bool,
+    number_of_snapshots: u32,
     snapshot_sections: Option<Vec<Vec<u8>>>,
     alphas: Arc<Alphas>,
     gridstructure: Arc<GridStructure>,
@@ -238,6 +239,20 @@ impl Simulation {
             None
         };
 
+        let number_of_snapshots = if write_binary_snapshots_number.is_some() && write_xyz_snapshots_number.is_some() {
+            if write_binary_snapshots_number.unwrap() > write_xyz_snapshots_number.unwrap(){
+                write_binary_snapshots_number.unwrap()
+            } else {
+                write_xyz_snapshots_number.unwrap()
+            }
+
+        } else if let Some(bin_count) = write_binary_snapshots_number {
+            bin_count
+        } else if let Some(xyz_count) = write_xyz_snapshots_number {
+            xyz_count
+        } else {
+            0
+        };
 
         let mut time_per_section: Vec<f64> = Vec::new();
         let mut surface_composition: Vec<f64> = Vec::new();
@@ -280,8 +295,9 @@ impl Simulation {
             surface_composition,
             time_per_section,
             surface_count,
-            write_xyz_snapshots_number,
-            write_binary_snapshots_number,
+            write_xyz_snapshots: write_xyz_snapshots_number.is_some(),
+            write_binary_snapshots: write_binary_snapshots_number.is_some(),
+            number_of_snapshots,
             snapshot_sections,
             alphas,
             gridstructure,
@@ -349,6 +365,8 @@ impl Simulation {
         }
 
         let section_size: u64 = self.niter / AMOUNT_SECTIONS as u64;
+
+
         println!("section_size: {}", section_size);
         println!("SAVE_TH: {}", save_every_nth);
         println!("niter: {}", self.niter);
@@ -436,7 +454,7 @@ impl Simulation {
         );
 
 
-        if self.write_binary_snapshots_number.is_some() {
+        if self.write_binary_snapshots {
             let mut wtr =
                 Writer::from_path(self.save_folder.clone() + "/snapshot_sections").unwrap();
 
@@ -464,7 +482,7 @@ impl Simulation {
             wtr.flush().unwrap();
         }
 
-        if self.write_xyz_snapshots_number.is_some() {
+        if self.write_xyz_snapshots {
             read_and_write::write_occ_as_xyz(
                 "snapshot_sections.xyz",
             self.save_folder.clone(),
@@ -624,15 +642,14 @@ impl Simulation {
     }
 
     fn cond_snap_and_heat_map(&mut self, iiter: &u64) {
-        const NUMBER_HEAT_MAP_SECTIONS: u64 = 200;
 
-        if (iiter) % (self.niter / NUMBER_HEAT_MAP_SECTIONS) == 0 {
+        if (iiter) % (self.niter / self.number_of_snapshots as u64) == 0 {
             self.calc_total_energy();
             self.energy_sections_list.push(self.total_energy);
         }
 
         if let Some(snap_shot_sections) = &mut self.snapshot_sections {
-            if (iiter) % (self.niter / NUMBER_HEAT_MAP_SECTIONS) == 0 {
+            if (iiter) % (self.niter / self.number_of_snapshots as u64) == 0 {
                 let mut t_vec = vec![0; self.atom_pos.len()];
                 t_vec
                     .iter_mut()
