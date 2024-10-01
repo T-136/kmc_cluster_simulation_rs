@@ -242,7 +242,7 @@ impl Buckets {
     }
 
     pub fn update_k_if_move_exists(&mut self, move_from: u32, move_to: u32, k: f64) {
-        //needs change bucket if k change makes it necessary
+        //problem: move needs change bucket if k change makes it necessary
         if let Some(item_indexes) = self
             .move_to_position
             .get(&(move_from as u64 + ((move_to as u64) << 32)))
@@ -259,16 +259,12 @@ impl Buckets {
             bucket.own_k -= k;
             bucket.k_s[item_indexes.vec_index] = k;
         }
-
-        // if self.remove_move(mmove.from, mmove.to) {
-        //     self.cond_add_item(ItemEnum::Move(mmove));
-        // }
     }
 
     pub fn update_k_if_item_exists(&mut self, item: ItemEnum, k: f64) {
         match item {
             ItemEnum::Move(mmove) => {
-                //todo: unnecessary remove and insert could change k in place
+                //todo: unnecessary remove and insert could change k in place, see fn update_k_if_move_exists
                 if self.remove_move(mmove.from, mmove.to) {
                     self.cond_add_item(ItemEnum::Move(mmove), k);
                 }

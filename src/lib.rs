@@ -399,10 +399,7 @@ impl Simulation {
                 .expect("kmc pick move failed");
             match item.clone() {
                 ItemEnum::Move(mmove) => {
-                    // println!("move barr: {}", mmove.e_barr);
-                    // println!("total_k: {}", self.possible_moves.total_k);
                     self.increment_time(k_tot, &mut rng_choose);
-
                     self.perform_move(mmove.from, mmove.to, mmove.e_diff);
                     self.update_moves(mmove.from, mmove.to);
                     self.update_possible_moves(mmove.from, mmove.to);
@@ -682,7 +679,6 @@ impl Simulation {
 
 #[cfg(test)]
 mod tests {
-    // Note this useful idiom: importing names from outer (for mod tests) scope.
     use super::*;
 
     #[test]

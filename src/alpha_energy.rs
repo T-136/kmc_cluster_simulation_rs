@@ -145,7 +145,7 @@ impl Alphas {
         alphas_summed_to_x
     }
 
-    fn alphas_div_by_cn(
+    fn _alphas_div_by_cn(
         alphas_input: &mut [[[f64; 12]; super::NUM_ATOM_TYPES]; super::NUM_ATOM_TYPES],
     ) {
         for i1 in 0..alphas_input.len() {
