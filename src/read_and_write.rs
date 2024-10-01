@@ -2,7 +2,6 @@ use chemfiles::{Atom, Frame, Trajectory, UnitCell};
 use fnv::FnvBuildHasher;
 use fnv::FnvHashMap;
 use std::collections::HashMap;
-use std::collections::HashSet;
 use std::fs;
 use std::io::{self, BufRead};
 
@@ -120,28 +119,6 @@ pub fn read_nn(pairlist_file: &str) -> HashMap<u32, [u32; super::CN], FnvBuildHa
     nn
 }
 
-pub fn read_nnn(pairlist_file: &str) -> HashMap<u32, [u32; super::GCN], FnvBuildHasher> {
-    // println!("reading pairlists from: {}", pairlist_file);
-
-    let pairlist = fs::File::open(pairlist_file).expect("Should have been able to read the file");
-
-    let lines = io::BufReader::new(pairlist);
-    let mut nnn: HashMap<u32, [u32; super::GCN], FnvBuildHasher> =
-        FnvHashMap::with_capacity_and_hasher(5400, Default::default());
-
-    for line in lines.lines() {
-        let r = line.unwrap();
-        let list: Vec<&str> = r.split_whitespace().clone().collect();
-        let mut neighbors: [u32; super::GCN] = [0; super::GCN];
-        let prime = list.first().clone();
-        for (i, l) in list.iter().skip(1).enumerate() {
-            neighbors[i] = l.parse::<u32>().unwrap()
-        }
-        nnn.insert(prime.unwrap().parse::<u32>().unwrap(), neighbors);
-    }
-    nnn
-}
-
 pub fn read_surounding_moves(
     surroundin_moves_file: &str,
 ) -> HashMap<u64, Vec<(u32, u32)>, fnv::FnvBuildHasher> {
@@ -167,56 +144,6 @@ pub fn read_surounding_moves(
     //     serde_json::from_reader(reader).unwrap();
 
     surrounding_moves
-}
-
-pub fn read_nnn_pair_no_intersec(
-    nnn_pairlist_file: &str,
-) -> HashMap<
-    u64,
-    (
-        Vec<Vec<u32>>,
-        Vec<Vec<u32>>,
-        Vec<(u32, Vec<u32>, Vec<u32>, Vec<u32>)>,
-    ),
-    fnv::FnvBuildHasher,
-> {
-    let nnn_pairlist =
-        fs::File::open(nnn_pairlist_file).expect("Should have been able to read the file");
-
-    let reader = io::BufReader::new(nnn_pairlist);
-
-    let nnn_pair_no_bit_shifting: HashMap<
-        u32,
-        HashMap<
-            u32,
-            (
-                Vec<Vec<u32>>,
-                Vec<Vec<u32>>,
-                Vec<(u32, Vec<u32>, Vec<u32>, Vec<u32>)>,
-            ),
-            fnv::FnvBuildHasher,
-        >,
-    > = serde_json::from_reader(reader).unwrap();
-
-    let mut nnn_pair: HashMap<
-        u64,
-        (
-            Vec<Vec<u32>>,
-            Vec<Vec<u32>>,
-            Vec<(u32, Vec<u32>, Vec<u32>, Vec<u32>)>,
-        ),
-        fnv::FnvBuildHasher,
-    > = FnvHashMap::with_capacity_and_hasher(5400, Default::default());
-    for (k1, d1) in nnn_pair_no_bit_shifting.into_iter() {
-        for (k2, d2) in d1.into_iter() {
-            nnn_pair.insert((k1 as u64 + ((k2 as u64) << 32)), d2);
-        }
-    }
-
-    // let nnn_pair: HashMap<u64, [HashMap<u32, Vec<u32>, FnvBuildHasher>; 2], FnvBuildHasher> =
-    //     serde_json::from_reader(reader).unwrap();
-
-    return nnn_pair;
 }
 
 pub fn read_nn_pair_no_intersec(
@@ -270,45 +197,6 @@ pub fn read_nn_pair_no_intersec(
             } else {
                 neighbors.2[i - 14] = l.parse::<u32>().unwrap()
             }
-        }
-        nn_pair
-            // .entry()
-            // .and_modify(|map| {
-            //     map.insert(j, neighbors.clone());
-            // })
-            .insert(site as u64 + ((j as u64) << 32), neighbors);
-        // println!("{:?}", line.unwrap());
-    }
-
-    return nn_pair;
-}
-
-pub fn read_nn_pairlists(
-    nn_pairlist_file: &str,
-) -> HashMap<u64, [u32; super::NN_PAIR_NUMBER], FnvBuildHasher> {
-    let nn_pairlist =
-        fs::File::open(nn_pairlist_file).expect("Should have been able to read the file");
-
-    let lines = io::BufReader::new(nn_pairlist);
-
-    let mut nn_pair: HashMap<u64, [u32; super::NN_PAIR_NUMBER], FnvBuildHasher> =
-        FnvHashMap::with_capacity_and_hasher(32000, Default::default());
-
-    for line in lines.lines() {
-        let r = line.unwrap();
-        let test: Vec<&str> = r.split_whitespace().clone().collect();
-        let site: u32 = std::cmp::min(
-            test[0].parse::<u32>().unwrap(),
-            test[1].parse::<u32>().unwrap(),
-        );
-        let j: u32 = std::cmp::max(
-            test[0].parse::<u32>().unwrap(),
-            test[1].parse::<u32>().unwrap(),
-        );
-        let mut neighbors: [u32; super::NN_PAIR_NUMBER] = [0; super::NN_PAIR_NUMBER];
-
-        for (i, l) in test.iter().skip(2).enumerate() {
-            neighbors[i] = l.parse::<u32>().unwrap()
         }
         nn_pair
             // .entry()

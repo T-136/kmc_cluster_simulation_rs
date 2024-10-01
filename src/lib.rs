@@ -25,10 +25,7 @@ pub use grid_structure::GridStructure;
 pub use sim::Results;
 
 const CN: usize = 12;
-// const GCN: usize = 54;
 const NUM_ATOM_TYPES: usize = 2;
-const GCN: usize = 145;
-const NN_PAIR_NUMBER: usize = 20;
 const AMOUNT_SECTIONS: usize = 1000;
 
 const GRID_SIZE: [u32; 3] = [30, 30, 30];
@@ -295,20 +292,6 @@ impl Simulation {
         };
         sim.calc_total_energy();
         sim
-    }
-
-    fn check_moves_not_start_255(&self, bucket: &buckets_linear::Bucket) {
-        for item in bucket.items.iter() {
-            if let buckets_linear::ItemEnum::Move(mmove) = item {
-                if self.atom_pos[mmove.from as usize].occ == 255 {
-                    println!("atom from {}", mmove.from);
-                    println!("atomt from {}", self.atom_pos[mmove.from as usize].occ);
-                    println!("atomt to {}", self.atom_pos[mmove.to as usize].occ);
-                    println!("panicked item {:?}", item);
-                    panic!("checked for 255");
-                }
-            }
-        }
     }
 
     pub fn run(&mut self) -> Results {
