@@ -104,7 +104,6 @@ pub struct Simulation {
     cn_dict_sections: Vec<HashMap<u8, f64>>,
     energy_sections_list: Vec<f64>,
     surface_composition: Vec<f64>,
-    optimization_cut_off_fraction: Vec<u64>,
     write_xyz_snapshots_number: Option<u32>,
     write_binary_snapshots_number: Option<u32>,
     snapshot_sections: Option<Vec<Vec<u8>>>,
@@ -126,7 +125,6 @@ impl Simulation {
         write_xyz_snapshots_number: Option<u32>,
         write_binary_snapshots_number: Option<u32>,
         repetition: usize,
-        optimization_cut_off_fraction: Vec<u64>,
         alphas: Arc<Alphas>,
         support_indices: Option<Vec<u32>>,
         gridstructure: Arc<GridStructure>,
@@ -285,7 +283,6 @@ impl Simulation {
             surface_composition,
             time_per_section,
             surface_count,
-            optimization_cut_off_fraction,
             write_xyz_snapshots_number,
             write_binary_snapshots_number,
             snapshot_sections,
@@ -319,9 +316,6 @@ impl Simulation {
         let mut rng_choose = SmallRng::from_entropy();
         let mut bucket_pick = SmallRng::from_entropy();
         let mut coin_toss = SmallRng::from_entropy();
-
-        let cut_off_perc = self.optimization_cut_off_fraction[0] as f64
-            / self.optimization_cut_off_fraction[1] as f64;
 
         let mut lowest_energy_struct = sim::LowestEnergy::default();
 
@@ -392,12 +386,8 @@ impl Simulation {
                     self.possible_moves.total_k
                 );
             }
-            let is_recording_sections = iiter * self.optimization_cut_off_fraction[1]
-                >= self.niter * self.optimization_cut_off_fraction[0];
 
             if !SAVE_ENTIRE_SIM
-                && iiter * self.optimization_cut_off_fraction[1]
-                    == self.niter * self.optimization_cut_off_fraction[0]
             {
                 self.cn_dict.iter_mut().for_each(|x| {
                     *x = 0;
@@ -430,21 +420,21 @@ impl Simulation {
                     // println!("total_k: {}", self.possible_moves.total_k);
                     self.increment_time(k_tot, &mut rng_choose);
 
-                    self.perform_move(mmove.from, mmove.to, mmove.e_diff, is_recording_sections);
+                    self.perform_move(mmove.from, mmove.to, mmove.e_diff);
                     self.update_moves(mmove.from, mmove.to);
                     self.update_possible_moves(mmove.from, mmove.to);
                     self.update_add_remove(mmove.from, mmove.to, &how);
                 }
                 ItemEnum::AddOrRemove(change) => {
                     println!("change something");
-                    self.change_item(change.pos, &how, is_recording_sections);
+                    self.change_item(change.pos, &how);
                     self.redox_update_total_k(change.pos);
                     self.redox_update_possibel_moves(change.pos, &how, self.temperature);
                     self.redox_update_add_remove(change.pos, &how);
                 }
             }
 
-            if SAVE_ENTIRE_SIM || is_recording_sections {
+            if SAVE_ENTIRE_SIM  {
                 temp_surface_composition = self.save_sections(
                     &iiter,
                     temp_surface_composition,
@@ -770,7 +760,6 @@ mod tests {
             Some(200),
             None,
             0_usize,
-            vec![4, 4],
             Arc::new(alphas),
             None,
             gridstructure,
@@ -876,7 +865,7 @@ mod tests {
         let e_before_move = sim.total_energy;
         println!("total_e {}", sim.total_energy);
         println!("e_diff 1: {}\n", item.e_diff);
-        sim.perform_move(from, to, item.e_diff, false);
+        sim.perform_move(from, to, item.e_diff);
         sim.update_moves(from, to);
         sim.update_possible_moves(from, to);
         // println!("gcn between: {:?}", sim.gcn_metal);
@@ -890,7 +879,7 @@ mod tests {
         println!("total_e {}", sim.total_energy);
         println!("e_diff 2: {}\n", item.e_diff);
 
-        sim.perform_move(to, to2, item.e_diff, false);
+        sim.perform_move(to, to2, item.e_diff);
         sim.update_moves(to, to2);
         sim.update_possible_moves(to, to2);
         // println!("gcn between2: ");
@@ -902,7 +891,7 @@ mod tests {
         };
         println!("total_e {}", sim.total_energy);
         println!("e_diff 2: {}\n", item.e_diff);
-        sim.perform_move(to2, from, item.e_diff, false);
+        sim.perform_move(to2, from, item.e_diff);
         // println!("gcn after: {:?}", sim.gcn_metal);
         println!("from: {}, to: {}, to2: {}\n", from, to, to2);
         println!("total_e {}", sim.total_energy);

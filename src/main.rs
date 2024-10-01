@@ -12,6 +12,7 @@ use std::io::BufReader;
 use std::path::Path;
 use std::sync::Arc;
 use std::thread;
+use std::env;
 
 fn prepend<T>(v: Vec<T>, s: &[T]) -> Vec<T>
 where
@@ -124,11 +125,6 @@ struct Args {
     #[arg(long)]
     /// adds one layer of atoms arround the cluster. Input muust be the atom e.g. "Pt".
     coating: Option<String>,
-
-    #[arg(short, long, value_delimiter = '/', default_values_t = vec!(1,2))]
-    /// fraction of the simulationtime where the programm starts looking for the structure with the
-    /// lowest energy
-    optimization_cut_off_fraction: Vec<u64>,
 }
 
 fn file_paths(
@@ -160,7 +156,7 @@ fn unpack_atoms_input(atoms: Vec<u32>) -> (Option<u32>, Option<Vec<u32>>) {
         panic!("wrong atoms input, user one of the two input options: \n number of atoms: '-a x' \n or number of atoms with miller indices: '-a x h k l' ")
     }
 }
-use std::env;
+
 fn main() {
     // enable_data_collection(true);
     env::set_var("RUST_BACKTRACE", "1");
@@ -199,7 +195,6 @@ fn main() {
     let niter = fmt_scient(&niter_str);
     let write_xyz_snapshots: Option<u32> = args.write_xyz_snapshots;
     let write_binary_snapshots: Option<u32> = args.write_binary_snapshots;
-    let optimization_cut_off_fraction: Vec<u64> = args.optimization_cut_off_fraction;
     let repetition = args.repetition;
 
     let repetition = if repetition.len() == 1 {
@@ -233,7 +228,6 @@ fn main() {
     for rep in repetition[0]..repetition[1] {
         let input_file = input_file.clone();
         let save_folder = save_folder.clone();
-        let optimization_cut_off_fraction = optimization_cut_off_fraction.clone();
         let gridstructure_arc = Arc::clone(&gridstructure);
         let alphas_arc = Arc::clone(&alphas_arc);
         let support_indices = support_indices.clone();
@@ -250,9 +244,8 @@ fn main() {
                 temperature,
                 save_folder,
                 write_xyz_snapshots,
-write_binary_snapshots,
+                write_binary_snapshots,
                 rep,
-                optimization_cut_off_fraction,
                 alphas_arc,
                 support_indices,
                 gridstructure_arc,

@@ -98,14 +98,14 @@ impl AtomChangeHow {
 }
 
 impl crate::Simulation {
-    pub fn change_item(&mut self, pos: u32, how: &AtomChangeHow, is_recording_sections: bool) {
+    pub fn change_item(&mut self, pos: u32, how: &AtomChangeHow) {
         match how {
             AtomChangeHow::Remove => {
                 self.atom_pos[pos as usize].occ = 255;
                 self.onlyocc.remove(&pos);
 
                 for o in self.gridstructure.nn[&pos] {
-                    if (super::SAVE_ENTIRE_SIM || is_recording_sections)
+                    if (super::SAVE_ENTIRE_SIM )
                         && self.atom_pos[o as usize].occ != 255
                         && self.atom_pos[o as usize].occ != 100
                     {
@@ -127,7 +127,7 @@ impl crate::Simulation {
                     self.atom_pos[o as usize].nn_atom_type_count[REMOVE_ATOM_TYPE as usize] -= 1;
                 }
 
-                if super::SAVE_ENTIRE_SIM || is_recording_sections {
+                if super::SAVE_ENTIRE_SIM  {
                     self.update_cn_dict(
                         self.atom_pos[pos as usize].nn_support,
                         self.atom_pos[pos as usize].cn_metal,
@@ -140,7 +140,7 @@ impl crate::Simulation {
                 self.atom_pos[pos as usize].occ = ADD_ATOM_TYPE;
 
                 for o in self.gridstructure.nn[&pos] {
-                    if (super::SAVE_ENTIRE_SIM || is_recording_sections)
+                    if (super::SAVE_ENTIRE_SIM )
                         && self.atom_pos[o as usize].occ != 255
                         && self.atom_pos[o as usize].occ != 100
                     {
@@ -168,7 +168,7 @@ impl crate::Simulation {
 
                 self.onlyocc.insert(pos);
 
-                if super::SAVE_ENTIRE_SIM || is_recording_sections {
+                if super::SAVE_ENTIRE_SIM  {
                     self.update_cn_dict(
                         self.atom_pos[pos as usize].nn_support,
                         self.atom_pos[pos as usize].cn_metal,
@@ -179,7 +179,7 @@ impl crate::Simulation {
 
                 let mut cn_changed = 0;
                 for o in self.gridstructure.nn[&pos] {
-                    if (super::SAVE_ENTIRE_SIM || is_recording_sections)
+                    if (super::SAVE_ENTIRE_SIM )
                         && self.atom_pos[o as usize].occ != 255
                         && self.atom_pos[o as usize].occ != 100
                         && o != pos
@@ -206,7 +206,7 @@ impl crate::Simulation {
                     self.atom_pos[o as usize].nn_atom_type_count[ADD_ATOM_TYPE as usize] += 1;
                 }
 
-                if super::SAVE_ENTIRE_SIM || is_recording_sections {
+                if super::SAVE_ENTIRE_SIM  {
                     self.update_cn_dict(
                         self.atom_pos[pos as usize].nn_support,
                         self.atom_pos[pos as usize].cn_metal,

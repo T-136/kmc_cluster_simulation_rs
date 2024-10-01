@@ -33,7 +33,6 @@ impl crate::Simulation {
         move_from: u32,
         move_to: u32,
         e_diff: f64,
-        is_recording_sections: bool,
     ) {
         let (from_change, to_change, _) =
             no_int_nn_from_move(move_from, move_to, &self.gridstructure.nn_pair_no_intersec);
@@ -44,7 +43,7 @@ impl crate::Simulation {
         self.onlyocc.remove(&move_from);
         self.onlyocc.insert(move_to);
 
-        if SAVE_ENTIRE_SIM || is_recording_sections {
+        if SAVE_ENTIRE_SIM {
             self.update_cn_dict(
                 self.atom_pos[move_from as usize].nn_support,
                 self.atom_pos[move_from as usize].cn_metal,
@@ -55,7 +54,7 @@ impl crate::Simulation {
         // println!("possible moves: {:?}", self.possible_moves.moves);
         let atom_type = self.atom_pos[move_to as usize].occ as usize;
         for o in from_change {
-            if (SAVE_ENTIRE_SIM || is_recording_sections)
+            if (SAVE_ENTIRE_SIM )
                 && self.atom_pos[o as usize].occ != 255
                 && self.atom_pos[o as usize].occ != 100
                 && o != move_to
@@ -85,7 +84,7 @@ impl crate::Simulation {
 
         for o in to_change {
             // for o in self.gridstructure.nn[&move_to] {
-            if (SAVE_ENTIRE_SIM || is_recording_sections)
+            if (SAVE_ENTIRE_SIM )
                 && self.atom_pos[o as usize].occ != 255
                 && self.atom_pos[o as usize].occ != 100
                 && o != move_from
@@ -116,7 +115,7 @@ impl crate::Simulation {
         self.atom_pos[move_to as usize].nn_atom_type_count[atom_type] -= 1;
         self.atom_pos[move_from as usize].nn_atom_type_count[atom_type] += 1;
 
-        if SAVE_ENTIRE_SIM || is_recording_sections {
+        if SAVE_ENTIRE_SIM  {
             self.update_cn_dict(
                 self.atom_pos[move_to as usize].nn_support,
                 self.atom_pos[move_to as usize].cn_metal,
