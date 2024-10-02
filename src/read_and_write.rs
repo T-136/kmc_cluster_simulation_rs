@@ -81,9 +81,9 @@ fn fmt_scient(num: &str) -> f64 {
     pre_num.parse::<f64>().unwrap() * base.powi(exp.parse::<i32>().unwrap())
 }
 
-pub fn read_atom_sites(input_file: &str, nsites: u32) -> Vec<[f64; 3]> {
+pub fn read_atom_sites(input_file: &str, nsites: usize) -> Vec<[f64; 3]> {
     // println!("reading atom_sites from: {}", input_file);
-    let mut xsites_positions: Vec<[f64; 3]> = Vec::with_capacity(nsites as usize);
+    let mut xsites_positions: Vec<[f64; 3]> = Vec::with_capacity(nsites);
     let pairlist = fs::File::open(input_file).expect("Should have been able to read the file");
     let lines = io::BufReader::new(pairlist);
 
@@ -210,3 +210,14 @@ pub fn read_nn_pair_no_intersec(
     return nn_pair;
 }
 
+pub fn unitcell_from_grid(input_file: &str) -> ([f64; 3], usize) {
+    let mut trajectory = Trajectory::open(input_file, 'r').unwrap();
+    let mut frame = Frame::new();
+
+    trajectory.read(&mut frame).unwrap();
+
+    (frame.cell().lengths(), frame.size())
+    
+
+
+}

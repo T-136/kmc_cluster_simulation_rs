@@ -6,7 +6,7 @@ use std::collections::{HashMap, HashSet};
 use std::fs::File;
 use std::io::prelude::*;
 use std::sync::Arc;
-use std::{fs, println, usize};
+use std::{fs, println};
 use std::num::NonZero;
 
 // mod add_remove_list;
@@ -27,9 +27,6 @@ pub use sim::Results;
 
 const CN: usize = 12;
 const NUM_ATOM_TYPES: usize = 2;
-const AMOUNT_SECTIONS: usize = 1000;
-
-const GRID_SIZE: [u32; 3] = [30, 30, 30];
 
 const SAVE_CN_DICT_AND_SURFACE_COMP: bool = false;
 
@@ -146,7 +143,8 @@ impl Simulation {
         support_e: i64,
         freez: Option<Vec<String>>,
     ) -> Simulation {
-        let nsites: u32 = GRID_SIZE[0] * GRID_SIZE[1] * GRID_SIZE[2] * 4;
+
+        let nsites = gridstructure.xsites_positions.len() as u32;
         let mut atom_pos: Vec<AtomPosition> = vec![
             AtomPosition {
                 occ: 255,
@@ -246,15 +244,6 @@ impl Simulation {
             )
         });
 
-        let cn_dict_sections = Vec::with_capacity(AMOUNT_SECTIONS);
-        let energy_sections_list = Vec::with_capacity(AMOUNT_SECTIONS);
-
-        let snapshot_sections:Option<Vec<Vec<u8>>> =  if write_xyz_snapshots_number.is_some() || write_binary_snapshots_number.is_some() {
-            Some(Vec::new())
-        } else {
-            None
-        };
-
         let number_of_snapshots: Option<std::num::NonZero<u32>> = if write_binary_snapshots_number.is_some() && write_xyz_snapshots_number.is_some() {
             if write_binary_snapshots_number.unwrap() > write_xyz_snapshots_number.unwrap(){
                 write_binary_snapshots_number
@@ -266,6 +255,24 @@ impl Simulation {
             write_binary_snapshots_number
         } else if  write_xyz_snapshots_number.is_some() {
             write_xyz_snapshots_number
+        } else {
+            None
+        };
+
+        let cn_dict_sections = if let Some(time_energy_sections) = time_energy_sections{
+             Vec::with_capacity(time_energy_sections.get() as usize)
+        } else {
+            Vec::new()
+        };
+
+        let energy_sections_list = if let Some(time_energy_sections) = time_energy_sections{
+            Vec::with_capacity(time_energy_sections.get() as usize)
+        } else {
+            Vec::new()
+        };
+
+        let snapshot_sections:Option<Vec<Vec<u8>>> =  if let Some(x) =  number_of_snapshots {
+            Some(Vec::with_capacity(x.get() as usize))
         } else {
             None
         };
@@ -403,7 +410,7 @@ impl Simulation {
             self.niter / 1000
         };
         if section_size <= 100 {
-            panic!("to few iterations of to large time_energy_sections");
+            panic!("to few iterations or to large time_energy_sections");
         }
 
 
@@ -740,6 +747,7 @@ mod tests {
             String,
             String,
             String,
+            String,
         ) {
             (
                 format!("{}bulk.poscar", grid_folder),
@@ -748,6 +756,7 @@ mod tests {
                 format!("{}atom_sites", grid_folder),
                 format!("{}nn_pair_no_intersec", grid_folder),
                 format!("{}surrounding_moves.json", grid_folder),
+                format!("{}grid_file.xyz", grid_folder),
             )
         }
         #[allow(unused_variables)]
@@ -758,6 +767,7 @@ mod tests {
             atom_sites,
             nn_pair_no_int_file,
             surrounding_moves_file,
+            grid_file,
         ) = file_paths("../303030-pair_kmc/".to_string());
 
         let gridstructure = GridStructure::new(
@@ -766,6 +776,7 @@ mod tests {
             atom_sites,
             bulk_file_name,
             surrounding_moves_file,
+            grid_file,
         );
         let gridstructure = Arc::new(gridstructure);
 

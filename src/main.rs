@@ -140,6 +140,7 @@ fn file_paths(
     String,
     String,
     String,
+    String,
 ) {
     (
         format!("{}bulk.poscar", grid_folder),
@@ -148,6 +149,7 @@ fn file_paths(
         format!("{}atom_sites", grid_folder),
         format!("{}nn_pair_no_intersec", grid_folder),
         format!("{}surrounding_moves.json", grid_folder),
+        format!("{}grid_file.xyz", grid_folder),
     )
 }
 
@@ -192,6 +194,7 @@ fn main() {
         atom_sites,
         nn_pair_no_int_file,
         surrounding_moves_file,
+        grid_file,
     ) = file_paths(args.grid_folder);
 
     let coating: Option<String> = args.coating;
@@ -219,6 +222,7 @@ fn main() {
         atom_sites,
         bulk_file_name,
         surrounding_moves_file,
+        grid_file,
     );
     let gridstructure = Arc::new(gridstructure);
 
