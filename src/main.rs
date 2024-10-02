@@ -10,6 +10,7 @@ use std::fs;
 use std::sync::Arc;
 use std::thread;
 use std::env;
+use std::num::NonZero;
 
 fn prepend<T>(v: Vec<T>, s: &[T]) -> Vec<T>
 where
@@ -120,7 +121,13 @@ struct Args {
     write_xyz_snapshots: Option<u32>,
 
     #[arg(long)]
-    /// adds one layer of atoms arround the cluster. Input muust be the atom e.g. "Pt".
+    /// Determines how often the energy of the system and its elapsed time will be saved in the exp
+    /// file. If this arg is not set the value from write_binary_snapshots/write_xyz_snapshots will
+    /// be used. If none is availabel 1000 sections is the default.
+    time_energy_sections: Option<u32>,
+
+    #[arg(long)]
+    /// adds one layer of atoms arround the cluster. Input muust be the coating atom e.g. "Pt".
     coating: Option<String>,
 }
 
@@ -190,8 +197,9 @@ fn main() {
     let coating: Option<String> = args.coating;
     let niter_str = args.iterations;
     let niter = fmt_scient(&niter_str);
-    let write_xyz_snapshots: Option<u32> = args.write_xyz_snapshots;
-    let write_binary_snapshots: Option<u32> = args.write_binary_snapshots;
+    let write_xyz_snapshots: Option<NonZero<u32>> = NonZero::new(args.write_xyz_snapshots.unwrap_or(0));
+    let write_binary_snapshots: Option<NonZero<u32>> = NonZero::new(args.write_binary_snapshots.unwrap_or(0));
+    let time_energy_sections: Option<NonZero<u32>> = NonZero::new(args.time_energy_sections.unwrap_or(0));
     let repetition = args.repetition;
 
     let repetition = if repetition.len() == 1 {
@@ -242,6 +250,7 @@ fn main() {
                 save_folder,
                 write_xyz_snapshots,
                 write_binary_snapshots,
+                time_energy_sections,
                 rep,
                 alphas_arc,
                 support_indices,

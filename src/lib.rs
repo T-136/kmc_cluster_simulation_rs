@@ -7,6 +7,7 @@ use std::fs::File;
 use std::io::prelude::*;
 use std::sync::Arc;
 use std::{fs, println, usize};
+use std::num::NonZero;
 
 // mod add_remove_list;
 pub mod alpha_energy;
@@ -82,6 +83,19 @@ fn freeze_atoms(pos: &mut [AtomPosition], freez: &[String], xyz: &Vec<[f64; 3]>)
 }
 
 #[derive(Clone)]
+pub struct SaveToFile {
+    save_folder: String,
+    write_xyz_snapshots: bool,
+    write_binary_snapshots: bool,
+    number_of_snapshots: Option<std::num::NonZero<u32>>,
+    snapshot_sections: Option<Vec<Vec<u8>>>,
+    time_energy_sections_count: Option<std::num::NonZero<u32>>,
+    energy_sections_list: Vec<f64>,
+    time_per_section: Vec<f64>,
+}
+
+
+#[derive(Clone)]
 pub struct Simulation {
     atom_pos: Vec<AtomPosition>,
     atom_names: HashMap<String, u8>,
@@ -95,16 +109,17 @@ pub struct Simulation {
     cn_dict: [u32; CN + 1],
     cn_dict_at_supp: [u32; CN + 1],
     surface_count: Vec<i32>,
-    time_per_section: Vec<f64>,
-    save_folder: String,
+    // time_per_section: Vec<f64>,
+    // save_folder: String,
     temperature: f64,
     cn_dict_sections: Vec<HashMap<u8, f64>>,
-    energy_sections_list: Vec<f64>,
+    // energy_sections_list: Vec<f64>,
     surface_composition: Vec<f64>,
-    write_xyz_snapshots: bool,
-    write_binary_snapshots: bool,
-    number_of_snapshots: u32,
-    snapshot_sections: Option<Vec<Vec<u8>>>,
+    save_to_file: SaveToFile,
+    // write_xyz_snapshots: bool,
+    // write_binary_snapshots: bool,
+    // number_of_snapshots: u32,
+    // snapshot_sections: Option<Vec<Vec<u8>>>,
     alphas: Arc<Alphas>,
     gridstructure: Arc<GridStructure>,
     support_e: i64,
@@ -120,8 +135,9 @@ impl Simulation {
         atoms_input: Option<u32>,
         temperature: f64,
         save_folder_name: String,
-        write_xyz_snapshots_number: Option<u32>,
-        write_binary_snapshots_number: Option<u32>,
+        write_xyz_snapshots_number: Option<NonZero<u32>>,
+        write_binary_snapshots_number: Option<NonZero<u32>>,
+        time_energy_sections: Option<NonZero<u32>>,
         repetition: usize,
         alphas: Arc<Alphas>,
         support_indices: Option<Vec<u32>>,
@@ -239,19 +255,27 @@ impl Simulation {
             None
         };
 
-        let number_of_snapshots = if write_binary_snapshots_number.is_some() && write_xyz_snapshots_number.is_some() {
+        let number_of_snapshots: Option<std::num::NonZero<u32>> = if write_binary_snapshots_number.is_some() && write_xyz_snapshots_number.is_some() {
             if write_binary_snapshots_number.unwrap() > write_xyz_snapshots_number.unwrap(){
-                write_binary_snapshots_number.unwrap()
+                write_binary_snapshots_number
             } else {
-                write_xyz_snapshots_number.unwrap()
+                write_xyz_snapshots_number
             }
 
-        } else if let Some(bin_count) = write_binary_snapshots_number {
-            bin_count
-        } else if let Some(xyz_count) = write_xyz_snapshots_number {
-            xyz_count
+        } else if  write_binary_snapshots_number.is_some() {
+            write_binary_snapshots_number
+        } else if  write_xyz_snapshots_number.is_some() {
+            write_xyz_snapshots_number
         } else {
-            0
+            None
+        };
+
+        let time_energy_sections_count = if time_energy_sections.is_some() {
+            time_energy_sections
+        }  else if number_of_snapshots.is_some() {
+            number_of_snapshots
+        } else {
+            None
         };
 
         let mut time_per_section: Vec<f64> = Vec::new();
@@ -288,17 +312,26 @@ impl Simulation {
             total_energy: 0.,
             cn_dict,
             cn_dict_at_supp,
-            save_folder: sub_folder,
+            // save_folder: sub_folder,
             temperature,
             cn_dict_sections,
-            energy_sections_list,
+            // energy_sections_list,
             surface_composition,
-            time_per_section,
+            // time_per_section,
             surface_count,
-            write_xyz_snapshots: write_xyz_snapshots_number.is_some(),
-            write_binary_snapshots: write_binary_snapshots_number.is_some(),
-            number_of_snapshots,
-            snapshot_sections,
+            save_to_file: SaveToFile{
+                write_xyz_snapshots: write_xyz_snapshots_number.is_some(),
+                write_binary_snapshots: write_binary_snapshots_number.is_some(),
+                number_of_snapshots,
+
+                time_per_section,
+                save_folder: sub_folder,
+
+                snapshot_sections,
+                energy_sections_list,
+                time_energy_sections_count,
+            },
+            // snapshot_sections,
             alphas,
             gridstructure,
             // neighboring_atom_type_count,
@@ -364,7 +397,14 @@ impl Simulation {
             }
         }
 
-        let section_size: u64 = self.niter / AMOUNT_SECTIONS as u64;
+        let section_size: u64 =  if let Some(t) = self.save_to_file.time_energy_sections_count{
+             self.niter / t.get() as u64
+        }else {
+            self.niter / 1000
+        };
+        if section_size <= 100 {
+            panic!("to few iterations of to large time_energy_sections");
+        }
 
 
         println!("section_size: {}", section_size);
@@ -372,7 +412,7 @@ impl Simulation {
         println!("niter: {}", self.niter);
 
         for iiter in 0..self.niter {
-            if iiter % section_size == 0 {
+            if iiter % (self.niter / 1000) == 0 {
                 println!(
                     "iteration {:e}; {}%",
                     iiter,
@@ -446,7 +486,7 @@ impl Simulation {
 
         read_and_write::write_occ_as_xyz(
             "lowest_energy.xyz",
-            self.save_folder.clone(),
+            self.save_to_file.save_folder.clone(),
             &[lowest_e_onlyocc],
             &self.gridstructure.xsites_positions,
             &self.gridstructure.unit_cell,
@@ -454,16 +494,16 @@ impl Simulation {
         );
 
 
-        if self.write_binary_snapshots {
+        if self.save_to_file.write_binary_snapshots {
             let mut wtr =
-                Writer::from_path(self.save_folder.clone() + "/snapshot_sections").unwrap();
+                Writer::from_path(self.save_to_file.save_folder.clone() + "/snapshot_sections").unwrap();
 
             let mut file = fs::OpenOptions::new()
                 .create(true) // To create a new file
                 .truncate(false)
                 .write(true)
                 // either use the ? operator or unwrap since it returns a Result
-                .open(self.save_folder.clone() + "/snapshot_sections").unwrap();
+                .open(self.save_to_file.save_folder.clone() + "/snapshot_sections").unwrap();
 
 
             for (atom_name, atom_index) in self.atom_names.iter(){
@@ -473,7 +513,7 @@ impl Simulation {
             file.write_all(",".as_bytes()).unwrap();
             }
             file.write_all(&[254]).unwrap();
-            if let Some(snap_shot_sections) = &self.snapshot_sections {
+            if let Some(snap_shot_sections) = &self.save_to_file.snapshot_sections {
                 for snapshot in snap_shot_sections {
                     file.write_all(snapshot).unwrap();
                     // file.write_all(b"\n").unwrap();
@@ -482,11 +522,11 @@ impl Simulation {
             wtr.flush().unwrap();
         }
 
-        if self.write_xyz_snapshots {
+        if self.save_to_file.write_xyz_snapshots {
             read_and_write::write_occ_as_xyz(
                 "snapshot_sections.xyz",
-            self.save_folder.clone(),
-            self.snapshot_sections.as_ref().unwrap(),
+            self.save_to_file.save_folder.clone(),
+            self.save_to_file.snapshot_sections.as_ref().unwrap(),
             &self.gridstructure.xsites_positions,
             &self.gridstructure.unit_cell,
             &self.atom_names,
@@ -506,8 +546,8 @@ impl Simulation {
             composition: self.composition,
             number_all_atoms: self.number_all_atoms,
             surface_composition: self.surface_composition.clone(),
-            energy_section_list: self.energy_sections_list.clone(),
-            time_per_section: self.time_per_section.clone(),
+            energy_section_list: self.save_to_file.energy_sections_list.clone(),
+            time_per_section: self.save_to_file.time_per_section.clone(),
             // cn_dict_sections: self.cn_dict_sections.clone(),
             duration,
         }
@@ -521,7 +561,7 @@ impl Simulation {
     }
 
     pub fn write_exp_file(&self, exp: &Results) {
-        let mut file = File::create(self.save_folder.clone() + "/exp_file.json").unwrap();
+        let mut file = File::create(self.save_to_file.save_folder.clone() + "/exp_file.json").unwrap();
         file.write_all(serde_json::to_string_pretty(exp).unwrap().as_bytes())
             .unwrap();
     }
@@ -561,7 +601,7 @@ impl Simulation {
             self.surface_composition
                 .push(temp_surface_composition as f64 / (section_size / SAVE_TH) as f64);
 
-            self.time_per_section.push(self.sim_time);
+            self.save_to_file.time_per_section.push(self.sim_time);
 
             return (0.);
         }
@@ -643,19 +683,23 @@ impl Simulation {
 
     fn cond_snap_and_heat_map(&mut self, iiter: &u64) {
 
-        if (iiter) % (self.niter / self.number_of_snapshots as u64) == 0 {
-            self.calc_total_energy();
-            self.energy_sections_list.push(self.total_energy);
+        if let Some(number_of_snapshots)  = self.save_to_file.number_of_snapshots {
+            if (iiter) % (self.niter / number_of_snapshots.get() as u64) == 0 {
+                self.calc_total_energy();
+                self.save_to_file.energy_sections_list.push(self.total_energy);
+            }
         }
 
-        if let Some(snap_shot_sections) = &mut self.snapshot_sections {
-            if (iiter) % (self.niter / self.number_of_snapshots as u64) == 0 {
-                let mut t_vec = vec![0; self.atom_pos.len()];
-                t_vec
-                    .iter_mut()
-                    .enumerate()
-                    .for_each(|(i, x)| *x = self.atom_pos[i].occ);
-                snap_shot_sections.push(t_vec);
+        if let Some(snap_shot_sections) = &mut self.save_to_file.snapshot_sections {
+            if let Some(number_of_snapshots)  = self.save_to_file.number_of_snapshots {
+                if (iiter) % (self.niter / number_of_snapshots.get() as u64) == 0 {
+                    let mut t_vec = vec![0; self.atom_pos.len()];
+                    t_vec
+                        .iter_mut()
+                        .enumerate()
+                        .for_each(|(i, x)| *x = self.atom_pos[i].occ);
+                    snap_shot_sections.push(t_vec);
+                }
             }
         }
 
@@ -753,8 +797,9 @@ mod tests {
             None,
             900.,
             String::from("./sim/"),
-            Some(200),
+            NonZero::new(200),
             None,
+            NonZero::new(1000),
             0_usize,
             Arc::new(alphas),
             None,
