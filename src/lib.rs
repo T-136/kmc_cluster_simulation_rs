@@ -31,7 +31,7 @@ const AMOUNT_SECTIONS: usize = 1000;
 
 const GRID_SIZE: [u32; 3] = [30, 30, 30];
 
-const SAVE_ENTIRE_SIM: bool = true;
+const SAVE_CN_DICT_AND_SURFACE_COMP: bool = false;
 
 // const how: add_remove::AddRemoveHow = add_remove::AddRemoveHow::RemoveAndAdd(1, 0);
 // const how: add_remove::AtomChangeHow = add_remove::AtomChangeHow::Remove;
@@ -412,7 +412,7 @@ impl Simulation {
         println!("niter: {}", self.niter);
 
         for iiter in 0..self.niter {
-            if iiter % (self.niter / 1000) == 0 {
+            if iiter % (self.niter / 500) == 0 {
                 println!(
                     "iteration {:e}; {}%",
                     iiter,
@@ -428,23 +428,6 @@ impl Simulation {
                 );
             }
 
-            if !SAVE_ENTIRE_SIM
-            {
-                self.cn_dict.iter_mut().for_each(|x| {
-                    *x = 0;
-                });
-                for o in 0..self.atom_pos.len() {
-                    if self.atom_pos[o].occ != 255 && self.atom_pos[o].occ != 100 {
-                        self.update_cn_dict(
-                            self.atom_pos[o as usize].nn_support,
-                            self.atom_pos[o as usize].cn_metal,
-                            true,
-                        );
-                        // self.cn_dict[self.atom_pos[o].cn_metal] += 1;
-                    };
-                }
-            };
-            self.cond_snap_and_heat_map(&iiter);
 
             let (item, k_tot) = self
                 .possible_moves
@@ -472,7 +455,8 @@ impl Simulation {
                 }
             }
 
-            if SAVE_ENTIRE_SIM  {
+            self.cond_snap_and_heat_map(&iiter);
+
                 temp_surface_composition = self.save_sections(
                     &iiter,
                     temp_surface_composition,
@@ -480,9 +464,7 @@ impl Simulation {
                     section_size,
                     save_every_nth,
                 );
-            }
         }
-
 
         read_and_write::write_occ_as_xyz(
             "lowest_energy.xyz",
@@ -575,31 +557,36 @@ impl Simulation {
         section_size: u64,
         SAVE_TH: u64,
     ) -> f64 {
-        if (iiter + 1) % SAVE_TH == 0 {
-            // temp_energy_section += self.total_energy;
-            temp_surface_composition += self.surface_count[0] as f64
-                / (self.surface_count[0] + self.surface_count[1]) as f64;
 
-            temp_cn_dict_section
-                .iter_mut()
-                .enumerate()
-                .for_each(|(i, v)| *v += self.cn_dict[i] as u64);
+        if SAVE_CN_DICT_AND_SURFACE_COMP  {
+            if (iiter + 1) % SAVE_TH == 0 {
+                // temp_energy_section += self.total_energy;
+                temp_surface_composition += self.surface_count[0] as f64
+                    / (self.surface_count[0] + self.surface_count[1]) as f64;
+
+                temp_cn_dict_section
+                    .iter_mut()
+                    .enumerate()
+                    .for_each(|(i, v)| *v += self.cn_dict[i] as u64);
+            }
         }
 
         if (iiter + 1) % section_size == 0 {
             // self.energy_sections_list
             //     .push(temp_energy_section as f64 / (section_size / SAVE_TH) as f64);
 
-            let mut section: HashMap<u8, f64> = HashMap::new();
-            for (k, list) in temp_cn_dict_section.iter_mut().enumerate() {
-                section.insert(k as u8, *list as f64 / (section_size / SAVE_TH) as f64);
-                *list = 0;
-            }
-            assert_eq!(temp_cn_dict_section, &mut [0_u64; CN + 1]);
-            self.cn_dict_sections.push(section.clone());
+            if SAVE_CN_DICT_AND_SURFACE_COMP  {
+                let mut section: HashMap<u8, f64> = HashMap::new();
+                for (k, list) in temp_cn_dict_section.iter_mut().enumerate() {
+                    section.insert(k as u8, *list as f64 / (section_size / SAVE_TH) as f64);
+                    *list = 0;
+                }
+                assert_eq!(temp_cn_dict_section, &mut [0_u64; CN + 1]);
+                self.cn_dict_sections.push(section.clone());
 
-            self.surface_composition
-                .push(temp_surface_composition as f64 / (section_size / SAVE_TH) as f64);
+                self.surface_composition
+                    .push(temp_surface_composition as f64 / (section_size / SAVE_TH) as f64);
+            }
 
             self.save_to_file.time_per_section.push(self.sim_time);
 
