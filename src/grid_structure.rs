@@ -7,7 +7,6 @@ pub const NN_PAIR_ONLY_INTERSEC_NUMBER: usize = 4;
 
 pub struct GridStructure {
     pub nn: HashMap<u32, [u32; super::CN], fnv::FnvBuildHasher>,
-    // pub nnn: HashMap<u32, [u32; super::GCN], fnv::FnvBuildHasher>,
     pub nn_pair_no_intersec: HashMap<
         u64,
         (
@@ -29,8 +28,9 @@ impl GridStructure {
         atom_sites: String,
         bulk_file_name: String,
         surrounding_moves_file: String,
+        grid_file: String,
     ) -> GridStructure {
-        let nsites: u32 = super::GRID_SIZE[0] * super::GRID_SIZE[1] * super::GRID_SIZE[2] * 4;
+        let (unit_cell, nsites) = read_and_write::unitcell_from_grid(&grid_file);
         let nn = read_and_write::read_nn(&nn_file);
         let nn_pair_no_intersec = read_and_write::read_nn_pair_no_intersec(&nn_pair_no_int_file);
         let surrounding_moves = read_and_write::read_surounding_moves(&surrounding_moves_file);
@@ -42,13 +42,6 @@ impl GridStructure {
                 err
             )
         });
-        let unit_cell_size = bulk.unscaled_lattice_vectors();
-        let unit_cell = [
-            unit_cell_size[0][0] * super::GRID_SIZE[0] as f64,
-            unit_cell_size[1][1] * super::GRID_SIZE[1] as f64,
-            unit_cell_size[2][2] * super::GRID_SIZE[2] as f64,
-        ];
-
         let xsites_positions = read_and_write::read_atom_sites(&atom_sites, nsites);
 
         GridStructure {

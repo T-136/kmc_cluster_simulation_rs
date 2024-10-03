@@ -1,24 +1,18 @@
-use anyhow;
-use atom_change::AtomChangeHow;
 use csv::Writer;
-use energy::EnergyInput;
-use rand;
 use rand::distributions::{Distribution, Uniform};
 use rand::prelude::*;
 use rand::rngs::SmallRng;
-use std::collections::hash_map::Entry;
-use std::collections::{BTreeMap, HashMap, HashSet};
+use std::collections::{HashMap, HashSet};
 use std::fs::File;
 use std::io::prelude::*;
-use std::io::BufReader;
+use std::num::NonZeroU32;
 use std::sync::Arc;
-use std::{cmp, eprint, fs, println, usize};
+use std::{fs, println};
 
 // mod add_remove_list;
 pub mod alpha_energy;
 mod atom_change;
 mod buckets_linear;
-pub mod energy;
 mod grid_structure;
 // mod main;
 mod moves;
@@ -32,15 +26,9 @@ pub use grid_structure::GridStructure;
 pub use sim::Results;
 
 const CN: usize = 12;
-// const GCN: usize = 54;
 const NUM_ATOM_TYPES: usize = 2;
-const GCN: usize = 145;
-const NN_PAIR_NUMBER: usize = 20;
-const AMOUNT_SECTIONS: usize = 1000;
 
-const GRID_SIZE: [u32; 3] = [30, 30, 30];
-
-const SAVE_ENTIRE_SIM: bool = true;
+const SAVE_CN_DICT_AND_SURFACE_COMP: bool = false;
 
 // const how: add_remove::AddRemoveHow = add_remove::AddRemoveHow::RemoveAndAdd(1, 0);
 // const how: add_remove::AtomChangeHow = add_remove::AtomChangeHow::Remove;
@@ -92,6 +80,18 @@ fn freeze_atoms(pos: &mut [AtomPosition], freez: &[String], xyz: &Vec<[f64; 3]>)
 }
 
 #[derive(Clone)]
+pub struct SaveToFile {
+    save_folder: String,
+    write_xyz_snapshots: bool,
+    write_binary_snapshots: bool,
+    number_of_snapshots: Option<std::num::NonZeroU32>,
+    snapshot_sections: Option<Vec<Vec<u8>>>,
+    time_energy_sections_count: Option<std::num::NonZeroU32>,
+    energy_sections_list: Vec<f64>,
+    time_per_section: Vec<f64>,
+}
+
+#[derive(Clone)]
 pub struct Simulation {
     atom_pos: Vec<AtomPosition>,
     atom_names: HashMap<String, u8>,
@@ -105,14 +105,17 @@ pub struct Simulation {
     cn_dict: [u32; CN + 1],
     cn_dict_at_supp: [u32; CN + 1],
     surface_count: Vec<i32>,
-    time_per_section: Vec<f64>,
-    save_folder: String,
+    // time_per_section: Vec<f64>,
+    // save_folder: String,
     temperature: f64,
     cn_dict_sections: Vec<HashMap<u8, f64>>,
-    energy_sections_list: Vec<f64>,
+    // energy_sections_list: Vec<f64>,
     surface_composition: Vec<f64>,
-    optimization_cut_off_fraction: Vec<u64>,
-    snap_shot_sections: Option<Vec<Vec<u8>>>,
+    save_to_file: SaveToFile,
+    // write_xyz_snapshots: bool,
+    // write_binary_snapshots: bool,
+    // number_of_snapshots: u32,
+    // snapshot_sections: Option<Vec<Vec<u8>>>,
     alphas: Arc<Alphas>,
     gridstructure: Arc<GridStructure>,
     support_e: i64,
@@ -128,9 +131,10 @@ impl Simulation {
         atoms_input: Option<u32>,
         temperature: f64,
         save_folder_name: String,
-        write_snap_shots: bool,
+        write_xyz_snapshots_number: Option<NonZeroU32>,
+        write_binary_snapshots_number: Option<NonZeroU32>,
+        time_energy_sections: Option<NonZeroU32>,
         repetition: usize,
-        optimization_cut_off_fraction: Vec<u64>,
         alphas: Arc<Alphas>,
         support_indices: Option<Vec<u32>>,
         gridstructure: Arc<GridStructure>,
@@ -138,7 +142,7 @@ impl Simulation {
         support_e: i64,
         freez: Option<Vec<String>>,
     ) -> Simulation {
-        let nsites: u32 = GRID_SIZE[0] * GRID_SIZE[1] * GRID_SIZE[2] * 4;
+        let nsites = gridstructure.xsites_positions.len() as u32;
         let mut atom_pos: Vec<AtomPosition> = vec![
             AtomPosition {
                 occ: 255,
@@ -238,15 +242,46 @@ impl Simulation {
             )
         });
 
-        let cn_dict_sections = Vec::with_capacity(AMOUNT_SECTIONS);
-        let energy_sections_list = Vec::with_capacity(AMOUNT_SECTIONS);
+        let number_of_snapshots: Option<std::num::NonZeroU32> =
+            if write_binary_snapshots_number.is_some() && write_xyz_snapshots_number.is_some() {
+                if write_binary_snapshots_number.unwrap() > write_xyz_snapshots_number.unwrap() {
+                    write_binary_snapshots_number
+                } else {
+                    write_xyz_snapshots_number
+                }
+            } else if write_binary_snapshots_number.is_some() {
+                write_binary_snapshots_number
+            } else if write_xyz_snapshots_number.is_some() {
+                write_xyz_snapshots_number
+            } else {
+                None
+            };
 
-        let snap_shot_sections: Option<Vec<Vec<u8>>> = if write_snap_shots {
-            Some(Vec::new())
+        let cn_dict_sections = if let Some(time_energy_sections) = time_energy_sections {
+            Vec::with_capacity(time_energy_sections.get() as usize)
+        } else {
+            Vec::new()
+        };
+
+        let energy_sections_list = if let Some(time_energy_sections) = time_energy_sections {
+            Vec::with_capacity(time_energy_sections.get() as usize)
+        } else {
+            Vec::new()
+        };
+
+        let snapshot_sections: Option<Vec<Vec<u8>>> = if let Some(x) = number_of_snapshots {
+            Some(Vec::with_capacity(x.get() as usize))
         } else {
             None
         };
 
+        let time_energy_sections_count = if time_energy_sections.is_some() {
+            time_energy_sections
+        } else if number_of_snapshots.is_some() {
+            number_of_snapshots
+        } else {
+            None
+        };
 
         let mut time_per_section: Vec<f64> = Vec::new();
         let mut surface_composition: Vec<f64> = Vec::new();
@@ -281,15 +316,26 @@ impl Simulation {
             total_energy: 0.,
             cn_dict,
             cn_dict_at_supp,
-            save_folder: sub_folder,
+            // save_folder: sub_folder,
             temperature,
             cn_dict_sections,
-            energy_sections_list,
+            // energy_sections_list,
             surface_composition,
-            time_per_section,
+            // time_per_section,
             surface_count,
-            optimization_cut_off_fraction,
-            snap_shot_sections,
+            save_to_file: SaveToFile {
+                write_xyz_snapshots: write_xyz_snapshots_number.is_some(),
+                write_binary_snapshots: write_binary_snapshots_number.is_some(),
+                number_of_snapshots,
+
+                time_per_section,
+                save_folder: sub_folder,
+
+                snapshot_sections,
+                energy_sections_list,
+                time_energy_sections_count,
+            },
+            // snapshot_sections,
             alphas,
             gridstructure,
             // neighboring_atom_type_count,
@@ -301,28 +347,11 @@ impl Simulation {
         sim
     }
 
-    fn check_moves_not_start_255(&self, bucket: &buckets_linear::Bucket) {
-        for item in bucket.items.iter() {
-            if let buckets_linear::ItemEnum::Move(mmove) = item {
-                if self.atom_pos[mmove.from as usize].occ == 255 {
-                    println!("atom from {}", mmove.from);
-                    println!("atomt from {}", self.atom_pos[mmove.from as usize].occ);
-                    println!("atomt to {}", self.atom_pos[mmove.to as usize].occ);
-                    println!("panicked item {:?}", item);
-                    panic!("checked for 255");
-                }
-            }
-        }
-    }
-
     pub fn run(&mut self) -> Results {
         let save_every_nth: u64 = 100;
         let mut rng_choose = SmallRng::from_entropy();
         let mut bucket_pick = SmallRng::from_entropy();
         let mut coin_toss = SmallRng::from_entropy();
-
-        let cut_off_perc = self.optimization_cut_off_fraction[0] as f64
-            / self.optimization_cut_off_fraction[1] as f64;
 
         let mut lowest_energy_struct = sim::LowestEnergy::default();
 
@@ -332,11 +361,7 @@ impl Simulation {
 
         let start = sim::Start::new(self.total_energy, &self.cn_dict);
 
-        let mut lowest_e_onlyocc: HashSet<u32, fnv::FnvBuildHasher> =
-            fnv::FnvHashSet::with_capacity_and_hasher(
-                self.number_all_atoms as usize,
-                Default::default(),
-            );
+        let mut lowest_e_onlyocc: Vec<u8> = Vec::with_capacity(self.number_all_atoms as usize);
 
         for (i, o) in self.atom_pos.iter().enumerate() {
             let pos_change = atom_change::AtomPosChange::new(
@@ -348,7 +373,7 @@ impl Simulation {
             );
             if let Some(pos_change) = pos_change {
                 self.possible_moves
-                    .cond_add_item(ItemEnum::AddOrRemove(pos_change));
+                    .cond_add_item(ItemEnum::AddOrRemove(pos_change), 0.);
             }
             if o.occ != 255 && o.occ != 100 {
                 for u in &self.gridstructure.nn[&(i as u32)] {
@@ -361,32 +386,42 @@ impl Simulation {
                             let (prev_e, future_e) =
                                 self.calc_energy_change_by_move(i as u32, *u, o.occ);
                             let e_barr = alpha_energy::e_barrier(prev_e, future_e);
-                            let mmove = moves::Move::new(
-                                i as u32,
-                                *u,
+                            let mmove = moves::Move {
+                                from: i as u32,
+                                to: *u,
+                                e_diff: future_e - prev_e,
                                 e_barr,
+                            };
+                            let k = moves::tst_rate_calculation(
                                 future_e - prev_e,
+                                e_barr,
                                 self.temperature,
                             );
                             assert!(self.atom_pos[i as usize].occ != 255);
-                            self.possible_moves.cond_add_item(ItemEnum::Move(mmove))
+                            self.possible_moves.cond_add_item(ItemEnum::Move(mmove), k)
                         }
                     }
                 }
             }
         }
 
-        let section_size: u64 = self.niter / AMOUNT_SECTIONS as u64;
+        let section_size: u64 = if let Some(t) = self.save_to_file.time_energy_sections_count {
+            self.niter / t.get() as u64
+        } else {
+            self.niter / 1000
+        };
+        if section_size <= 100 {
+            panic!("to few iterations or to large time_energy_sections");
+        }
+
         println!("section_size: {}", section_size);
         println!("SAVE_TH: {}", save_every_nth);
         println!("niter: {}", self.niter);
 
-        // print!("poss moves: {:?}", self.possible_moves.moves);
-
         for iiter in 0..self.niter {
-            if iiter % section_size == 0 {
+            if iiter % (self.niter / 100) == 0 {
                 println!(
-                    "iteration {}; {}%",
+                    "iteration {:e}; {}%",
                     iiter,
                     (iiter as f64 / self.niter as f64 * 100.)
                 );
@@ -398,39 +433,7 @@ impl Simulation {
                         .sum::<usize>(),
                     self.possible_moves.total_k
                 );
-                // println!("poss addremove: {:?}", self.add_or_remove.atoms);
-                // println!(
-                //     "buckets: {} {:?} ",
-                //     self.possible_moves.buckets_list.len(),
-                //     self.possible_moves
-                //         .buckets_list
-                //         .iter()
-                //         .map(|bucket| (bucket.bucket_power, bucket.own_k))
-                //         .collect::<Vec<(i32, f64)>>()
-                // );
             }
-            let is_recording_sections = iiter * self.optimization_cut_off_fraction[1]
-                >= self.niter * self.optimization_cut_off_fraction[0];
-
-            if !SAVE_ENTIRE_SIM
-                && iiter * self.optimization_cut_off_fraction[1]
-                    == self.niter * self.optimization_cut_off_fraction[0]
-            {
-                self.cn_dict.iter_mut().for_each(|x| {
-                    *x = 0;
-                });
-                for o in 0..self.atom_pos.len() {
-                    if self.atom_pos[o].occ != 255 && self.atom_pos[o].occ != 100 {
-                        self.update_cn_dict(
-                            self.atom_pos[o as usize].nn_support,
-                            self.atom_pos[o as usize].cn_metal,
-                            true,
-                        );
-                        // self.cn_dict[self.atom_pos[o].cn_metal] += 1;
-                    };
-                }
-            };
-            self.cond_snap_and_heat_map(&iiter);
 
             let (item, k_tot) = self
                 .possible_moves
@@ -444,53 +447,78 @@ impl Simulation {
             match item.clone() {
                 ItemEnum::Move(mmove) => {
                     self.increment_time(k_tot, &mut rng_choose);
-
-                    self.perform_move(mmove.from, mmove.to, mmove.e_diff, is_recording_sections);
+                    self.perform_move(mmove.from, mmove.to, mmove.e_diff);
                     self.update_moves(mmove.from, mmove.to);
                     self.update_possible_moves(mmove.from, mmove.to);
                     self.update_add_remove(mmove.from, mmove.to, &how);
                 }
                 ItemEnum::AddOrRemove(change) => {
                     println!("change something");
-                    self.change_item(change.pos, &how, is_recording_sections);
+                    self.change_item(change.pos, &how);
                     self.redox_update_total_k(change.pos);
                     self.redox_update_possibel_moves(change.pos, &how, self.temperature);
                     self.redox_update_add_remove(change.pos, &how);
                 }
             }
 
-            if SAVE_ENTIRE_SIM || is_recording_sections {
-                temp_surface_composition = self.save_sections(
-                    &iiter,
-                    temp_surface_composition,
-                    &mut temp_cn_dict_section,
-                    section_size,
-                    save_every_nth,
-                );
-            }
+            self.cond_snap_and_heat_map(&iiter);
+
+            temp_surface_composition = self.save_sections(
+                &iiter,
+                temp_surface_composition,
+                &mut temp_cn_dict_section,
+                section_size,
+                save_every_nth,
+            );
         }
 
-
         read_and_write::write_occ_as_xyz(
-            self.save_folder.clone(),
-            lowest_e_onlyocc,
+            "lowest_energy.xyz",
+            self.save_to_file.save_folder.clone(),
+            &[lowest_e_onlyocc],
             &self.gridstructure.xsites_positions,
             &self.gridstructure.unit_cell,
-            &self.atom_pos,
             &self.atom_names,
         );
 
-
-        if self.snap_shot_sections.is_some() {
+        if self.save_to_file.write_binary_snapshots {
             let mut wtr =
-                Writer::from_path(self.save_folder.clone() + "/snap_shot_sections.csv").unwrap();
-            if let Some(snap_shot_sections) = &self.snap_shot_sections {
-                for heat_section in snap_shot_sections {
-                    wtr.write_record(heat_section.iter().map(|x| x.to_string()))
-                        .unwrap();
+                Writer::from_path(self.save_to_file.save_folder.clone() + "/snapshot_sections")
+                    .unwrap();
+
+            let mut file = fs::OpenOptions::new()
+                .create(true) // To create a new file
+                .truncate(false)
+                .write(true)
+                // either use the ? operator or unwrap since it returns a Result
+                .open(self.save_to_file.save_folder.clone() + "/snapshot_sections")
+                .unwrap();
+
+            for (atom_name, atom_index) in self.atom_names.iter() {
+                file.write_all(atom_name.as_bytes()).unwrap();
+                file.write_all(":".as_bytes()).unwrap();
+                file.write_all(&[*atom_index]).unwrap();
+                file.write_all(",".as_bytes()).unwrap();
+            }
+            file.write_all(&[254]).unwrap();
+            if let Some(snap_shot_sections) = &self.save_to_file.snapshot_sections {
+                for snapshot in snap_shot_sections {
+                    file.write_all(snapshot).unwrap();
+                    // file.write_all(b"\n").unwrap();
                 }
             }
             wtr.flush().unwrap();
+        }
+
+        if self.save_to_file.write_xyz_snapshots {
+            read_and_write::write_occ_as_xyz(
+                "snapshot_sections.xyz",
+                self.save_to_file.save_folder.clone(),
+                self.save_to_file.snapshot_sections.as_ref().unwrap(),
+                &self.gridstructure.xsites_positions,
+                &self.gridstructure.unit_cell,
+                &self.atom_names,
+            );
         }
 
         let duration = sim::Duration {
@@ -505,8 +533,8 @@ impl Simulation {
             composition: self.composition,
             number_all_atoms: self.number_all_atoms,
             surface_composition: self.surface_composition.clone(),
-            energy_section_list: self.energy_sections_list.clone(),
-            time_per_section: self.time_per_section.clone(),
+            energy_section_list: self.save_to_file.energy_sections_list.clone(),
+            time_per_section: self.save_to_file.time_per_section.clone(),
             // cn_dict_sections: self.cn_dict_sections.clone(),
             duration,
         }
@@ -517,12 +545,11 @@ impl Simulation {
         let rand_value: f64 = between.sample(rng_e_number);
 
         self.sim_time -= rand_value.ln() / k_tot;
-        // rand_value.ln() / k_tot
-        // self.sim_time += 1. / k_tot
     }
 
     pub fn write_exp_file(&self, exp: &Results) {
-        let mut file = File::create(self.save_folder.clone() + "/exp_file.json").unwrap();
+        let mut file =
+            File::create(self.save_to_file.save_folder.clone() + "/exp_file.json").unwrap();
         file.write_all(serde_json::to_string_pretty(exp).unwrap().as_bytes())
             .unwrap();
     }
@@ -536,33 +563,37 @@ impl Simulation {
         section_size: u64,
         SAVE_TH: u64,
     ) -> f64 {
-        if (iiter + 1) % SAVE_TH == 0 {
-            // temp_energy_section += self.total_energy;
-            temp_surface_composition += self.surface_count[0] as f64
-                / (self.surface_count[0] + self.surface_count[1]) as f64;
+        if SAVE_CN_DICT_AND_SURFACE_COMP {
+            if (iiter + 1) % SAVE_TH == 0 {
+                // temp_energy_section += self.total_energy;
+                temp_surface_composition += self.surface_count[0] as f64
+                    / (self.surface_count[0] + self.surface_count[1]) as f64;
 
-            temp_cn_dict_section
-                .iter_mut()
-                .enumerate()
-                .for_each(|(i, v)| *v += self.cn_dict[i] as u64);
+                temp_cn_dict_section
+                    .iter_mut()
+                    .enumerate()
+                    .for_each(|(i, v)| *v += self.cn_dict[i] as u64);
+            }
         }
 
         if (iiter + 1) % section_size == 0 {
             // self.energy_sections_list
             //     .push(temp_energy_section as f64 / (section_size / SAVE_TH) as f64);
 
-            let mut section: HashMap<u8, f64> = HashMap::new();
-            for (k, list) in temp_cn_dict_section.iter_mut().enumerate() {
-                section.insert(k as u8, *list as f64 / (section_size / SAVE_TH) as f64);
-                *list = 0;
+            if SAVE_CN_DICT_AND_SURFACE_COMP {
+                let mut section: HashMap<u8, f64> = HashMap::new();
+                for (k, list) in temp_cn_dict_section.iter_mut().enumerate() {
+                    section.insert(k as u8, *list as f64 / (section_size / SAVE_TH) as f64);
+                    *list = 0;
+                }
+                assert_eq!(temp_cn_dict_section, &mut [0_u64; CN + 1]);
+                self.cn_dict_sections.push(section.clone());
+
+                self.surface_composition
+                    .push(temp_surface_composition as f64 / (section_size / SAVE_TH) as f64);
             }
-            assert_eq!(temp_cn_dict_section, &mut [0_u64; CN + 1]);
-            self.cn_dict_sections.push(section.clone());
 
-            self.surface_composition
-                .push(temp_surface_composition as f64 / (section_size / SAVE_TH) as f64);
-
-            self.time_per_section.push(self.sim_time);
+            self.save_to_file.time_per_section.push(self.sim_time);
 
             return (0.);
         }
@@ -643,24 +674,27 @@ impl Simulation {
     }
 
     fn cond_snap_and_heat_map(&mut self, iiter: &u64) {
-        const NUMBER_HEAT_MAP_SECTIONS: u64 = 200;
-
-        if (iiter) % (self.niter / NUMBER_HEAT_MAP_SECTIONS) == 0 {
-            self.calc_total_energy();
-            self.energy_sections_list.push(self.total_energy);
-        }
-
-        if let Some(snap_shot_sections) = &mut self.snap_shot_sections {
-            if (iiter) % (self.niter / NUMBER_HEAT_MAP_SECTIONS) == 0 {
-                let mut t_vec = vec![0; self.atom_pos.len()];
-                t_vec
-                    .iter_mut()
-                    .enumerate()
-                    .for_each(|(i, x)| *x = self.atom_pos[i].occ);
-                snap_shot_sections.push(t_vec);
+        if let Some(number_of_snapshots) = self.save_to_file.number_of_snapshots {
+            if (iiter) % (self.niter / number_of_snapshots.get() as u64) == 0 {
+                self.calc_total_energy();
+                self.save_to_file
+                    .energy_sections_list
+                    .push(self.total_energy);
             }
         }
 
+        if let Some(snap_shot_sections) = &mut self.save_to_file.snapshot_sections {
+            if let Some(number_of_snapshots) = self.save_to_file.number_of_snapshots {
+                if (iiter) % (self.niter / number_of_snapshots.get() as u64) == 0 {
+                    let mut t_vec = vec![0; self.atom_pos.len()];
+                    t_vec
+                        .iter_mut()
+                        .enumerate()
+                        .for_each(|(i, x)| *x = self.atom_pos[i].occ);
+                    snap_shot_sections.push(t_vec);
+                }
+            }
+        }
     }
 
     fn calc_total_energy(&mut self) -> f64 {
@@ -695,112 +729,34 @@ impl Simulation {
     }
 }
 
-pub fn find_simulation_with_lowest_energy(folder: String) -> anyhow::Result<()> {
-    // let mut folder_with_lowest_e: PathBuf = PathBuf::new();
-    let mut lowest_e: f64 = f64::INFINITY;
-
-    for _ in 0..2 {
-        let paths = fs::read_dir(&folder).unwrap();
-        for path in paths {
-            let ok_path = match path {
-                Ok(ok_path) => ok_path,
-                Err(e) => {
-                    eprintln!("{:?}", e);
-                    continue;
-                }
-            };
-
-            if !ok_path.path().is_dir() {
-                continue;
-            }
-            let folder = fs::read_dir(ok_path.path().as_path())?;
-            for folder_entry in folder {
-                let file = match folder_entry {
-                    Ok(path2) => {
-                        if !path2.path().is_dir() {
-                            path2
-                        } else {
-                            println!("unexpected folder");
-                            continue;
-                        }
-                    }
-                    Err(e) => {
-                        eprintln!("{:?}", e);
-                        continue;
-                    }
-                };
-                if !file.path().to_str().unwrap().ends_with(".json") {
-                    continue;
-                }
-
-                let file = fs::File::open(file.path()).unwrap();
-                let reader = BufReader::new(file);
-                let res: Result<Results, serde_json::Error> = serde_json::from_reader(reader);
-                match res {
-                    Ok(res) => {
-                        if res.lowest_energy_struct.energy <= lowest_e {
-                            // folder_with_lowest_e = path2.path();
-                            lowest_e = res.lowest_energy_struct.energy;
-                        } else {
-                            println!("{:?}", res.lowest_energy_struct.energy);
-                            println!("{:?}", ok_path.path())
-                            // fs::remove_dir_all(ok_path.path())?;
-                        }
-                    }
-                    Err(e) => {
-                        eprintln!("{:?}", format!("{:?} in folder {:?}", e, ok_path.path()));
-                        // fs::remove_dir_all(ok_path.path())?;
-                    }
-                }
-            }
-        }
-    }
-
-    Ok(())
-}
-
 #[cfg(test)]
 mod tests {
-    // Note this useful idiom: importing names from outer (for mod tests) scope.
     use super::*;
 
     #[test]
     fn test_perform_move() {
         fn file_paths(
             grid_folder: String,
-        ) -> (
-            String,
-            String,
-            String,
-            String,
-            // String,
-            String,
-            String,
-            String,
-            String,
-        ) {
+        ) -> (String, String, String, String, String, String, String) {
             (
                 format!("{}bulk.poscar", grid_folder),
                 format!("{}nearest_neighbor", grid_folder),
-                format!("{}next_nearest_neighbor", grid_folder),
                 format!("{}nn_pairlist", grid_folder),
-                // format!("{}nnn_pairlist", grid_folder),
                 format!("{}atom_sites", grid_folder),
                 format!("{}nn_pair_no_intersec", grid_folder),
-                format!("{}nnn_gcn_no_intersec.json", grid_folder),
                 format!("{}surrounding_moves.json", grid_folder),
+                format!("{}grid_file.xyz", grid_folder),
             )
         }
         #[allow(unused_variables)]
         let (
             bulk_file_name,
             nn_file,
-            nnn_file,
             nn_pairlist_file,
             atom_sites,
             nn_pair_no_int_file,
-            nnn_pair_no_int_file,
             surrounding_moves_file,
+            grid_file,
         ) = file_paths("../303030-pair_kmc/".to_string());
 
         let gridstructure = GridStructure::new(
@@ -809,15 +765,16 @@ mod tests {
             atom_sites,
             bulk_file_name,
             surrounding_moves_file,
+            grid_file,
         );
         let gridstructure = Arc::new(gridstructure);
 
         let mut atom_names: HashMap<String, u8> = HashMap::new();
         // atom_names.insert("Pt".to_string(), 0);
         // atom_names.insert("Pd".to_string(), 1);
-        atom_names.insert("Al".to_string(), 100);
+        // atom_names.insert("Al".to_string(), 100);
 
-        let alphas_arr = read_alphas("./Pt_Pd.6.bat".to_string(), &mut atom_names);
+        let alphas_arr = alpha_energy::read_alphas("./Pt_Pd.6.bat".to_string(), &mut atom_names);
         let alphas = alpha_energy::Alphas::new(alphas_arr);
 
         let mut sim = Simulation::new(
@@ -827,9 +784,10 @@ mod tests {
             None,
             900.,
             String::from("./sim/"),
-            false,
+            NonZeroU32::new(200),
+            None,
+            NonZeroU32::new(1000),
             0_usize,
-            vec![4, 4],
             Arc::new(alphas),
             None,
             gridstructure,
@@ -851,7 +809,7 @@ mod tests {
             );
             if let Some(pos_change) = pos_change {
                 sim.possible_moves
-                    .cond_add_item(ItemEnum::AddOrRemove(pos_change));
+                    .cond_add_item(ItemEnum::AddOrRemove(pos_change), 0.);
             }
             if o.occ != 255 && o.occ != 100 {
                 for u in &sim.gridstructure.nn[&(i as u32)] {
@@ -864,15 +822,19 @@ mod tests {
                             let (prev_e, future_e) =
                                 sim.calc_energy_change_by_move(i as u32, *u, o.occ);
                             let e_barr = alpha_energy::e_barrier(prev_e, future_e);
-                            let mmove = moves::Move::new(
-                                i as u32,
-                                *u,
+                            let mmove = moves::Move {
+                                from: i as u32,
+                                to: *u,
+                                e_diff: future_e - prev_e,
                                 e_barr,
+                            };
+                            let k = moves::tst_rate_calculation(
                                 future_e - prev_e,
+                                e_barr,
                                 sim.temperature,
                             );
                             assert!(sim.atom_pos[i as usize].occ != 255);
-                            sim.possible_moves.cond_add_item(ItemEnum::Move(mmove))
+                            sim.possible_moves.cond_add_item(ItemEnum::Move(mmove), k)
                         }
                     }
                 }
@@ -935,7 +897,7 @@ mod tests {
         let e_before_move = sim.total_energy;
         println!("total_e {}", sim.total_energy);
         println!("e_diff 1: {}\n", item.e_diff);
-        sim.perform_move(from, to, item.e_diff, false);
+        sim.perform_move(from, to, item.e_diff);
         sim.update_moves(from, to);
         sim.update_possible_moves(from, to);
         // println!("gcn between: {:?}", sim.gcn_metal);
@@ -949,7 +911,7 @@ mod tests {
         println!("total_e {}", sim.total_energy);
         println!("e_diff 2: {}\n", item.e_diff);
 
-        sim.perform_move(to, to2, item.e_diff, false);
+        sim.perform_move(to, to2, item.e_diff);
         sim.update_moves(to, to2);
         sim.update_possible_moves(to, to2);
         // println!("gcn between2: ");
@@ -961,60 +923,10 @@ mod tests {
         };
         println!("total_e {}", sim.total_energy);
         println!("e_diff 2: {}\n", item.e_diff);
-        sim.perform_move(to2, from, item.e_diff, false);
+        sim.perform_move(to2, from, item.e_diff);
         // println!("gcn after: {:?}", sim.gcn_metal);
         println!("from: {}, to: {}, to2: {}\n", from, to, to2);
         println!("total_e {}", sim.total_energy);
         assert_eq!(e_before_move, sim.total_energy);
     }
-}
-
-fn read_alphas(alphas_file: String, atom_names: &mut HashMap<String, u8>) -> [[[f64; 12]; 2]; 2] {
-    const LINE_COUNT: usize = 14;
-
-    let path = std::path::Path::new(&alphas_file);
-    let file_name = path.file_name().unwrap();
-    // let mut x = alphas_file.split('.');
-    let atom_names_string = file_name.to_str().unwrap().split('.').next().unwrap();
-    for (i, metal) in atom_names_string.split('_').enumerate() {
-        atom_names.insert(metal.to_string(), i as u8);
-    }
-    let pairlist = fs::File::open(alphas_file).expect("Should have been able to read the file");
-
-    let lines = BufReader::new(pairlist);
-    let mut alphas: [[[f64; 12]; 2]; 2] = [[[0.; 12]; 2]; 2];
-
-    for (i, line) in lines.lines().enumerate() {
-        println!("{}", i);
-        let r = line.unwrap();
-        let num = r.parse::<f64>().unwrap();
-        println!("{}", num);
-        if i < LINE_COUNT {
-            if i >= 12 {
-                continue;
-            }
-            alphas[0][0][i] = num;
-        } else if i < LINE_COUNT * 2 {
-            if i >= LINE_COUNT * 2 - 2 {
-                continue;
-            }
-            alphas[1][1][i - LINE_COUNT * 1] = num;
-        } else if i < LINE_COUNT * 3 {
-            if i >= LINE_COUNT * 3 - 2 {
-                continue;
-            }
-            alphas[1][0][i - LINE_COUNT * 2] = num;
-        } else {
-            if i >= LINE_COUNT * 4 - 2 {
-                continue;
-            }
-            alphas[0][1][i - LINE_COUNT * 3] = num;
-        }
-    }
-    alphas
-}
-
-enum FromOrTo {
-    From,
-    To,
 }

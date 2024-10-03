@@ -24,7 +24,7 @@ const CN_E_ADD: [f64; 13] = [12., 11., 9., 9., 4., 9., 9., 9., 9., 9., 90., 1000
 #[derive(Clone, Debug)]
 pub struct AtomPosChange {
     pub pos: u32,
-    pub k: f64,
+    // pub k: f64,
     pub how: AtomChangeHow,
 }
 
@@ -36,27 +36,28 @@ impl AtomPosChange {
         temperature: f64,
         how: AtomChangeHow,
     ) -> Option<AtomPosChange> {
+        //todo energy for adding/removing atoms (reduction/oxidization)
         return None;
-        match how {
-            AtomChangeHow::Remove | AtomChangeHow::Exchange => {
-                if atom_type == REMOVE_ATOM_TYPE {
-                    let k = tst_rate_calculation(cn as f64 * E_RATIO_BARR, temperature);
-                    return Some(AtomPosChange { pos, k, how });
-                }
-            }
-            AtomChangeHow::Add => {
-                if atom_type == 255 {
-                    let k = if cn == 0 {
-                        tst_rate_calculation((100) as f64 * E_RATIO_BARR, temperature)
-                    } else {
-                        tst_rate_calculation(CN_E_ADD[cn as usize] * E_RATIO_BARR, temperature)
-                    };
-                    // println!("k of change {}", k);
-                    return Some(AtomPosChange { pos, k, how });
-                }
-            }
-            AtomChangeHow::RemoveAndAdd => todo!(),
-        }
+        // match how {
+        //     AtomChangeHow::Remove | AtomChangeHow::Exchange => {
+        //         if atom_type == REMOVE_ATOM_TYPE {
+        //             let k = tst_rate_calculation(cn as f64 * E_RATIO_BARR, temperature);
+        //             return Some(AtomPosChange { pos, k, how });
+        //         }
+        //     }
+        //     AtomChangeHow::Add => {
+        //         if atom_type == 255 {
+        //             let k = if cn == 0 {
+        //                 tst_rate_calculation((100) as f64 * E_RATIO_BARR, temperature)
+        //             } else {
+        //                 tst_rate_calculation(CN_E_ADD[cn as usize] * E_RATIO_BARR, temperature)
+        //             };
+        //             // println!("k of change {}", k);
+        //             return Some(AtomPosChange { pos, k, how });
+        //         }
+        //     }
+        //     AtomChangeHow::RemoveAndAdd => todo!(),
+        // }
 
         None
     }
@@ -97,14 +98,14 @@ impl AtomChangeHow {
 }
 
 impl crate::Simulation {
-    pub fn change_item(&mut self, pos: u32, how: &AtomChangeHow, is_recording_sections: bool) {
+    pub fn change_item(&mut self, pos: u32, how: &AtomChangeHow) {
         match how {
             AtomChangeHow::Remove => {
                 self.atom_pos[pos as usize].occ = 255;
                 self.onlyocc.remove(&pos);
 
                 for o in self.gridstructure.nn[&pos] {
-                    if (super::SAVE_ENTIRE_SIM || is_recording_sections)
+                    if (super::SAVE_CN_DICT_AND_SURFACE_COMP)
                         && self.atom_pos[o as usize].occ != 255
                         && self.atom_pos[o as usize].occ != 100
                     {
@@ -126,7 +127,7 @@ impl crate::Simulation {
                     self.atom_pos[o as usize].nn_atom_type_count[REMOVE_ATOM_TYPE as usize] -= 1;
                 }
 
-                if super::SAVE_ENTIRE_SIM || is_recording_sections {
+                if super::SAVE_CN_DICT_AND_SURFACE_COMP {
                     self.update_cn_dict(
                         self.atom_pos[pos as usize].nn_support,
                         self.atom_pos[pos as usize].cn_metal,
@@ -139,7 +140,7 @@ impl crate::Simulation {
                 self.atom_pos[pos as usize].occ = ADD_ATOM_TYPE;
 
                 for o in self.gridstructure.nn[&pos] {
-                    if (super::SAVE_ENTIRE_SIM || is_recording_sections)
+                    if (super::SAVE_CN_DICT_AND_SURFACE_COMP)
                         && self.atom_pos[o as usize].occ != 255
                         && self.atom_pos[o as usize].occ != 100
                     {
@@ -167,7 +168,7 @@ impl crate::Simulation {
 
                 self.onlyocc.insert(pos);
 
-                if super::SAVE_ENTIRE_SIM || is_recording_sections {
+                if super::SAVE_CN_DICT_AND_SURFACE_COMP {
                     self.update_cn_dict(
                         self.atom_pos[pos as usize].nn_support,
                         self.atom_pos[pos as usize].cn_metal,
@@ -178,7 +179,7 @@ impl crate::Simulation {
 
                 let mut cn_changed = 0;
                 for o in self.gridstructure.nn[&pos] {
-                    if (super::SAVE_ENTIRE_SIM || is_recording_sections)
+                    if (super::SAVE_CN_DICT_AND_SURFACE_COMP)
                         && self.atom_pos[o as usize].occ != 255
                         && self.atom_pos[o as usize].occ != 100
                         && o != pos
@@ -205,7 +206,7 @@ impl crate::Simulation {
                     self.atom_pos[o as usize].nn_atom_type_count[ADD_ATOM_TYPE as usize] += 1;
                 }
 
-                if super::SAVE_ENTIRE_SIM || is_recording_sections {
+                if super::SAVE_CN_DICT_AND_SURFACE_COMP {
                     self.update_cn_dict(
                         self.atom_pos[pos as usize].nn_support,
                         self.atom_pos[pos as usize].cn_metal,
@@ -342,15 +343,19 @@ impl crate::Simulation {
                             let e_barr = alpha_energy::e_barrier(prev_e, future_e);
                             assert!(self.atom_pos[nn_to_pos as usize].occ != 100);
 
-                            let mmove = moves::Move::new(
-                                nn_to_pos,
-                                pos,
+                            let mmove = moves::Move {
+                                from: nn_to_pos,
+                                to: pos,
+                                e_diff: future_e - prev_e,
                                 e_barr,
+                            };
+                            let k = moves::tst_rate_calculation(
                                 future_e - prev_e,
+                                e_barr,
                                 self.temperature,
                             );
                             self.possible_moves
-                                .cond_add_item(crate::ItemEnum::Move(mmove));
+                                .cond_add_item(crate::ItemEnum::Move(mmove), k);
                         }
                     }
                 }
@@ -376,15 +381,19 @@ impl crate::Simulation {
                             );
                             let e_barr = alpha_energy::e_barrier(prev_e, future_e);
                             assert!(self.atom_pos[pos as usize].occ != 100);
-                            let mmove = moves::Move::new(
-                                pos,
-                                nn_to_atom,
+                            let mmove = moves::Move {
+                                from: pos,
+                                to: nn_to_atom,
+                                e_diff: future_e - prev_e,
                                 e_barr,
+                            };
+                            let k = moves::tst_rate_calculation(
                                 future_e - prev_e,
+                                e_barr,
                                 self.temperature,
                             );
                             self.possible_moves
-                                .cond_add_item(crate::ItemEnum::Move(mmove));
+                                .cond_add_item(crate::ItemEnum::Move(mmove), k);
                         }
                     }
                 }
@@ -418,10 +427,15 @@ impl crate::Simulation {
                 let (prev_e, future_e) =
                     self.calc_energy_change_by_move(full, empty, self.atom_pos[full as usize].occ);
                 let e_barr = alpha_energy::e_barrier(prev_e, future_e);
-                let mmove =
-                    moves::Move::new(full, empty, e_barr, future_e - prev_e, self.temperature);
+                let mmove = moves::Move {
+                    from: full,
+                    to: empty,
+                    e_diff: future_e - prev_e,
+                    e_barr,
+                };
+                let k = moves::tst_rate_calculation(future_e - prev_e, e_barr, self.temperature);
                 self.possible_moves
-                    .update_k_if_item_exists(crate::ItemEnum::Move(mmove));
+                    .update_k_if_item_exists(crate::ItemEnum::Move(mmove), k);
             }
         }
     }
@@ -440,7 +454,7 @@ impl crate::Simulation {
                     );
                     if let Some(pos) = pos {
                         self.possible_moves
-                            .update_k_if_item_exists(crate::ItemEnum::AddOrRemove(pos));
+                            .update_k_if_item_exists(crate::ItemEnum::AddOrRemove(pos), 0.);
                     }
                 }
             }
@@ -459,7 +473,7 @@ impl crate::Simulation {
                     );
                     if let Some(pos) = pos {
                         self.possible_moves
-                            .cond_add_item(crate::ItemEnum::AddOrRemove(pos));
+                            .cond_add_item(crate::ItemEnum::AddOrRemove(pos), 0.);
                     }
 
                     // maybe not necessary if prev does it
