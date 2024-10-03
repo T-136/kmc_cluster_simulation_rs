@@ -6,11 +6,11 @@ use mc::alpha_energy;
 use mc::GridStructure;
 use mc::Simulation;
 use std::collections::HashMap;
+use std::env;
 use std::fs;
+use std::num::NonZeroU32;
 use std::sync::Arc;
 use std::thread;
-use std::env;
-use std::num::NonZero;
 
 fn prepend<T>(v: Vec<T>, s: &[T]) -> Vec<T>
 where
@@ -74,20 +74,29 @@ struct Args {
     /// acceptes integer and scientific formats e.g. 1E10 or 1.5E10
     iterations: String,
 
-    #[arg(short, long, default_value_t = 300.)]
-    /// temperature at which the sumulation is run, currently the temperature has to be constatn
-    /// throughout the simulation
-    temperature: f64,
-
     #[arg(long)]
     /// path to the file with the alpha values. File name has to conatain the metals names in
     /// coorect order in the first parte of the file name before the ".", seperated by "_" e.g. Pt_Pd.bat
     alphas: String,
 
+    #[arg(short, long, value_delimiter = ',', default_values_t = vec!(300.))]
+    /// temperature at which the sumulation is run
+    /// Set multiple temperatures seperated by comma to run simulations with different temperature
+    /// in parallel.  
+    ///
+    /// The repetition will be applied to each temperature. Therefore the number of paralle run
+    /// simulations is the number of temperatures times the repetition.
+    /// To enable all simulations to run in parallel there need to be equal or more threads then
+    /// simulations running.
+    temperatures: Vec<f64>,
+
     #[arg(short, long, value_delimiter = '-', default_values_t = vec!(1))]
-    /// How often the simulation should be repeated. This can be used to make sure the result is representative. 
-    /// The input can be the number of threads e.g. 5.
-    /// Each run will be started in a seperated thread.
+    /// How often the simulation should be repeated. This can be used to make sure the result is representative.
+    /// The repetition will be applied to each temperature. Therefore the number of paralle run
+    /// simulations is the number of temperatures times the repetition.
+    /// To enable all simulations to run in parallel there need to be equal or more threads then
+    /// simulations running.
+    ///
     /// The loaded grid_folder-files will only be loaded once and used by all threads meaning the memory
     /// increase is minimal for addidtional simulation runs.
     /// Alternativley the input can be a range e.g. 5-10. This is usefull because the thread number is part of the simulation name.
@@ -106,14 +115,14 @@ struct Args {
     grid_folder: String,
 
     #[arg(long)]
-    /// Set how many snapshots are saved in each simulation. 
+    /// Set how many snapshots are saved in each simulation.
     /// Snapshots are spread out equally throughout the simulation.
     /// Saving the snapshots as binary file requires the used grid to visualize them but is more space
     /// as long as the cluster has not less then 25 atoms then there are atoms in the grid.
     write_binary_snapshots: Option<u32>,
 
     #[arg(short, long)]
-    /// Set how many snapshots are saved in each simulation. 
+    /// Set how many snapshots are saved in each simulation.
     /// Snapshots are spread out equally throughout the simulation.
     /// Saving the snapshots as xyz file can lead to large files. When the number of atoms is less
     /// then 25 times the number of grid positions writing to the binary format will save disk
@@ -131,17 +140,7 @@ struct Args {
     coating: Option<String>,
 }
 
-fn file_paths(
-    grid_folder: String,
-) -> (
-    String,
-    String,
-    String,
-    String,
-    String,
-    String,
-    String,
-) {
+fn file_paths(grid_folder: String) -> (String, String, String, String, String, String, String) {
     (
         format!("{}bulk.poscar", grid_folder),
         format!("{}nearest_neighbor", grid_folder),
@@ -169,7 +168,7 @@ fn main() {
 
     let args = Args::parse();
     let save_folder: String = args.folder;
-    let temperature: f64 = args.temperature;
+    let temperatures: Vec<f64> = args.temperatures;
     if !std::path::Path::new(&save_folder).exists() {
         fs::create_dir_all(&save_folder).unwrap();
     }
@@ -200,9 +199,12 @@ fn main() {
     let coating: Option<String> = args.coating;
     let niter_str = args.iterations;
     let niter = fmt_scient(&niter_str);
-    let write_xyz_snapshots: Option<NonZero<u32>> = NonZero::new(args.write_xyz_snapshots.unwrap_or(0));
-    let write_binary_snapshots: Option<NonZero<u32>> = NonZero::new(args.write_binary_snapshots.unwrap_or(0));
-    let time_energy_sections: Option<NonZero<u32>> = NonZero::new(args.time_energy_sections.unwrap_or(0));
+    let write_xyz_snapshots: Option<NonZeroU32> =
+        NonZeroU32::new(args.write_xyz_snapshots.unwrap_or(0));
+    let write_binary_snapshots: Option<NonZeroU32> =
+        NonZeroU32::new(args.write_binary_snapshots.unwrap_or(0));
+    let time_energy_sections: Option<NonZeroU32> =
+        NonZeroU32::new(args.time_energy_sections.unwrap_or(0));
     let repetition = args.repetition;
 
     let repetition = if repetition.len() == 1 {
@@ -213,8 +215,22 @@ fn main() {
 
     let mut atom_names: HashMap<String, u8> = HashMap::new();
 
-    println!("{:?}", repetition);
-    let mut handle_vec = Vec::new();
+    if let Ok(default_parallelism_approx) = thread::available_parallelism() {
+        println!(
+            "\nestimated available parallellism {}, 
+                does not account for other running processes which might occupy threads,
+                for accurate information read the specs of the hardware in use or do a test runs to see the performace",
+            default_parallelism_approx.get()
+        );
+    } else {
+        println!();
+    };
+    println!(
+        "{} threads are requrired to run everything in parallel ({} repetitions * {} temperatures)\n",
+        repetition.len() * temperatures.len(),
+        repetition.len(),
+        temperatures.len(),
+    );
 
     let gridstructure = GridStructure::new(
         nn_file,
@@ -234,38 +250,41 @@ fn main() {
     );
     let alphas_arc = Arc::new(alphas);
 
-    for rep in repetition[0]..repetition[1] {
-        let input_file = input_file.clone();
-        let save_folder = save_folder.clone();
-        let gridstructure_arc = Arc::clone(&gridstructure);
-        let alphas_arc = Arc::clone(&alphas_arc);
-        let support_indices = support_indices.clone();
-        let atom_names = atom_names.clone();
-        let coating = coating.clone();
-        let freez = freez.clone();
+    let mut handle_vec = Vec::new();
+    for temperature in temperatures {
+        for rep in repetition[0]..repetition[1] {
+            let input_file = input_file.clone();
+            let save_folder = save_folder.clone();
+            let gridstructure_arc = Arc::clone(&gridstructure);
+            let alphas_arc = Arc::clone(&alphas_arc);
+            let support_indices = support_indices.clone();
+            let atom_names = atom_names.clone();
+            let coating = coating.clone();
+            let freez = freez.clone();
 
-        handle_vec.push(thread::spawn(move || {
-            let mut sim = Simulation::new(
-                atom_names,
-                niter,
-                input_file,
-                atoms_input,
-                temperature,
-                save_folder,
-                write_xyz_snapshots,
-                write_binary_snapshots,
-                time_energy_sections,
-                rep,
-                alphas_arc,
-                support_indices,
-                gridstructure_arc,
-                coating,
-                support_e,
-                freez,
-            );
-            let exp = sim.run();
-            sim.write_exp_file(&exp);
-        }));
+            handle_vec.push(thread::spawn(move || {
+                let mut sim = Simulation::new(
+                    atom_names,
+                    niter,
+                    input_file,
+                    atoms_input,
+                    temperature,
+                    save_folder,
+                    write_xyz_snapshots,
+                    write_binary_snapshots,
+                    time_energy_sections,
+                    rep,
+                    alphas_arc,
+                    support_indices,
+                    gridstructure_arc,
+                    coating,
+                    support_e,
+                    freez,
+                );
+                let exp = sim.run();
+                sim.write_exp_file(&exp);
+            }));
+        }
     }
     for handle in handle_vec {
         handle.join().unwrap();
