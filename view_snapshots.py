@@ -172,6 +172,6 @@ for i in index:
         atom_list.append(Atom(atoms_dict[x], position=index_xyz[i]))
 
     atoms.append(Atoms(atom_list))
-    print(len(atoms[-1]))
 
-view(atoms)
+if __name__ == "__main__":
+    view(atoms)
