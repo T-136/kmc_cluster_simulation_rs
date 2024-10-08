@@ -22,19 +22,20 @@ Throughout the simulation it is possible to track the energy and save snapshots.
 ### Outlook
 More accurate TST representation.
 
-## Requirements
+## Usage
+
+### Requirements
 
 - [Rust](https://www.rust-lang.org/tools/install)
 - [Python](https://www.python.org/) used version 3.11.10
 - [ASE](https://wiki.fysik.dtu.dk/ase/) *used version: ase-3.22.1*
 
-
-## Install from git 
+### Install from git 
 ```bash
 git clone git@github.com:T-136/kmc_cluster_simulation_rs.git
 ```
 
-## Build the binary
+### Build the binary
 
 Build the program with:
 ```bash
@@ -43,7 +44,7 @@ cargo build -r
 After the build step is complete the compiled program can be found in your project folder under "./target/release/mc".
 
 
-## Run the simulation
+### Run the simulation
 ```bash
 ./target/release/mc -s ./example_data/711_1pt_arround_pd.xyz -t 600,700  -i 1e8 -r 1  --alphas ./alpha_alt.json  -g ../303030-pair_kmc/ -w
 ```
