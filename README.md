@@ -88,7 +88,7 @@ Use "-h" or "--help" to see the available flags and how to use them.
 ## Visualisation
 When the "write-xyz-snapshots" flag is activated the simulation saves snapshots equally spread throughout the simulation. These snapshots can be visualized using [ASE](https://wiki.fysik.dtu.dk/ase/).
 
-If the "write-binary-snapshots" flag is activated snapshots will be saved as a binary file which can be viewed  using the provided python script "./python_scripts/view_snapshots.py".
+If the "write-binary-snapshots" flag is activated snapshots will be saved as a binary file which can be viewed  using the provided python script "./view_snapshots.py".
 
 ```
 positional arguments:
