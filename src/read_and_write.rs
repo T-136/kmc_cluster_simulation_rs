@@ -25,8 +25,8 @@ pub fn write_occ_as_xyz(
     unit_cell: &[f64; 3],
     atom_names: &HashMap<String, u8>,
 ) {
-    let  _ = Trajectory::open(save_folder.clone()+ "/" + save_file, 'w').unwrap();
-    let mut trajectory = Trajectory::open(save_folder.clone()+ "/" + save_file, 'a').unwrap();
+    let _ = Trajectory::open(save_folder.clone() + "/" + save_file, 'w').unwrap();
+    let mut trajectory = Trajectory::open(save_folder.clone() + "/" + save_file, 'a').unwrap();
 
     for snapshot in snapshot_sections.iter() {
         let mut frame = Frame::new();
@@ -49,7 +49,6 @@ pub fn write_occ_as_xyz(
             .write(&frame)
             .unwrap_or_else(|x| eprintln!("{}", x));
     }
-
 }
 
 pub fn read_sample(input_file: &str) -> Vec<(String, [f64; 3])> {
@@ -217,7 +216,4 @@ pub fn unitcell_from_grid(input_file: &str) -> ([f64; 3], usize) {
     trajectory.read(&mut frame).unwrap();
 
     (frame.cell().lengths(), frame.size())
-    
-
-
 }

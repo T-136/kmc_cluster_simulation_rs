@@ -25,7 +25,7 @@ fn fmt_scient(num: &str) -> u64 {
     let mut parts = num.split(['e', 'E']);
 
     let pre_num = parts.next().unwrap();
-    let exp = parts.next().unwrap_or("0");
+    let exp_str = parts.next().unwrap_or("0");
     if parts.next().is_some() {
         panic!("wrong iterations input");
     }
@@ -37,11 +37,15 @@ fn fmt_scient(num: &str) -> u64 {
     } else {
         0
     };
+    let exp = exp_str.parse::<u32>().expect("wrong iterations input");
     let new_pre_num = pre_num.replace('.', "");
-
+    assert!(
+        after_dot_count as u32 > exp,
+        "iteration has to be a whole number"
+    );
     let base: u64 = 10;
     new_pre_num.parse::<u64>().expect("wrong iterations input")
-        * base.pow(exp.parse::<u32>().expect("wrong iterations input") - after_dot_count as u32)
+        * base.pow(exp - after_dot_count as u32)
 }
 
 #[derive(Parser, Debug)]
@@ -67,7 +71,9 @@ struct Args {
     start_structure: StartStructure,
 
     #[arg(short, long, default_value_t = String::from("./sim/"))]
-    /// folder to store results
+    /// output folder
+    /// each simulation will have its own sub-folder with tempearture iteration atoms and and index
+    /// number e.g. "800K_100000000I_12007A_0"
     folder: String,
 
     #[arg(short, long)]
@@ -75,8 +81,7 @@ struct Args {
     iterations: String,
 
     #[arg(long)]
-    /// path to the file with the alpha values. File name has to conatain the metals names in
-    /// coorect order in the first parte of the file name before the ".", seperated by "_" e.g. Pt_Pd.bat
+    /// path to the json file with the alpha values.
     alphas: String,
 
     #[arg(short, long, value_delimiter = ',', default_values_t = vec!(300.))]
@@ -102,7 +107,7 @@ struct Args {
     /// Alternativley the input can be a range e.g. 5-10. This is usefull because the thread number is part of the simulation name.
     repetition: Vec<usize>,
 
-    #[arg(short, long, value_delimiter = ',', allow_hyphen_values(true))]
+    #[arg(long, value_delimiter = ',', allow_hyphen_values(true))]
     /// freez a boarder in one ore multiple directions. Directions are given by x, y, z, -x, -y or -z.
     freeze: Option<Vec<String>>,
 
