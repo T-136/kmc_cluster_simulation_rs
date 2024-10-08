@@ -40,7 +40,7 @@ fn fmt_scient(num: &str) -> u64 {
     let exp = exp_str.parse::<u32>().expect("wrong iterations input");
     let new_pre_num = pre_num.replace('.', "");
     assert!(
-        after_dot_count as u32 > exp,
+        (after_dot_count as u32) < exp,
         "iteration has to be a whole number"
     );
     let base: u64 = 10;
