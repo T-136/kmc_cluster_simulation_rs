@@ -46,8 +46,9 @@ After the build step is complete the compiled program can be found in your proje
 
 ### Run the simulation
 ```bash
-./target/release/mc -s ./example_data/711_1pt_arround_pd.xyz -t 600,700  -i 1e8 -r 1  --alphas ./alpha_alt.json  -g ../303030-pair_kmc/ -w
+./target/release/mc -s data/example_data/4033A_2lPt.xyz -t 700,900  -i 1e7 -r 1  --alphas ./alpha.json  -g ./303030-grid_kmc/ --write-xyz-snapshots 10
 ```
+
 
 Use "-h" or "--help" to see the available flags and how to use them. 
 ```

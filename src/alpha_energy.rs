@@ -191,11 +191,11 @@ impl Alphas {
 
         let mut energy = 0.;
 
-        // if cn_metal == 3 {
-        //     energy += 0.3 ;
-        // } else if cn_metal == 4 {
-        //     energy += 0.4 ;
-        // }
+        if cn_metal == 3 {
+            energy += 0.3;
+        } else if cn_metal == 4 {
+            energy += 0.4;
+        }
 
         // if cn_metal == 3 || cn_metal == 4 {
         //     return morse_potential(energy);
