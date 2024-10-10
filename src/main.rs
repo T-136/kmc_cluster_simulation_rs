@@ -145,9 +145,8 @@ struct Args {
     coating: Option<String>,
 }
 
-fn file_paths(grid_folder: String) -> (String, String, String, String, String, String, String) {
+fn file_paths(grid_folder: String) -> (String, String, String, String, String, String) {
     (
-        format!("{}bulk.poscar", grid_folder),
         format!("{}nearest_neighbor", grid_folder),
         format!("{}nn_pairlist", grid_folder),
         format!("{}atom_sites", grid_folder),
@@ -192,7 +191,6 @@ fn main() {
 
     #[allow(unused_variables)]
     let (
-        bulk_file_name,
         nn_file,
         nn_pairlist_file,
         atom_sites,
@@ -241,7 +239,6 @@ fn main() {
         nn_file,
         nn_pair_no_int_file,
         atom_sites,
-        bulk_file_name,
         surrounding_moves_file,
         grid_file,
     );

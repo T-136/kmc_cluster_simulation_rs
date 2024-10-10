@@ -26,7 +26,6 @@ impl GridStructure {
         nn_file: String,
         nn_pair_no_int_file: String,
         atom_sites: String,
-        bulk_file_name: String,
         surrounding_moves_file: String,
         grid_file: String,
     ) -> GridStructure {
@@ -35,13 +34,6 @@ impl GridStructure {
         let nn_pair_no_intersec = read_and_write::read_nn_pair_no_intersec(&nn_pair_no_int_file);
         let surrounding_moves = read_and_write::read_surounding_moves(&surrounding_moves_file);
 
-        let bulk = Poscar::from_path(bulk_file_name).unwrap_or_else(|err| {
-            panic!(
-                "Could not parse '{:?}': {}",
-                stringify!(bulk_file_name),
-                err
-            )
-        });
         let xsites_positions = read_and_write::read_atom_sites(&atom_sites, nsites);
 
         GridStructure {
